@@ -26,7 +26,7 @@ rm -f "$hooks/post-checkout"                                                # no
 sh .githooks/install > /dev/null
 sh .githooks/install > /dev/null                                            # twice
 
-for h in post-checkout post-merge post-rewrite; do
+for h in post-checkout post-merge post-rewrite post-commit; do
     check "$h has the line exactly once" "[ \$(grep -c 'sprucemarks build-info' '$hooks/$h') -eq 1 ]"
     check "$h line comes right after the first line" "sed -n 2p '$hooks/$h' | grep -q 'sprucemarks build-info'"
     check "$h is executable" "[ -x '$hooks/$h' ]"
@@ -42,5 +42,12 @@ check "switch rewrites build-info.json" "grep -q '\"branch\": \"main\"' deploy/b
 rm -f deploy/build-info.json
 git merge -q --ff-only other
 check "merge (pull) rewrites build-info.json" "grep -q \"\$(git rev-parse --short HEAD)\" deploy/build-info.json"
+
+git switch -q -c conflict-a main && echo a > c.txt && git add c.txt && git commit -q -m a
+git switch -q -c conflict-b main && echo b > c.txt && git add c.txt && git commit -q -m b
+git merge -q conflict-a > /dev/null 2>&1    # conflicts: post-merge does not run
+echo resolved > c.txt && git add c.txt && rm -f deploy/build-info.json
+git commit -q --no-edit                      # finishing the merge by hand runs post-commit
+check "merge finished by hand rewrites build-info.json" "grep -q \"\$(git rev-parse --short HEAD)\" deploy/build-info.json"
 
 exit $fail

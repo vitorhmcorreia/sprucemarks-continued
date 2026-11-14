@@ -329,6 +329,15 @@ dead_links_page.run = async function(only_problems) {
 // Actions
 //---------
 dead_links_page.start_check = function(only_problems) {
+    const status = dead_links_page.element.status
+
+    if (!browser.permissions || !browser.permissions.request) {
+        // the loaded manifest has no optional permissions: usually a branch switch without reloading the extension
+        status.textContent = "Can't ask for website access: the extension needs to be reloaded (in your browser's " +
+            'extensions page, click the reload arrow on Sprucemarks Continued), then try again.'
+        return
+    } // if
+
     // permissions.request must be called straight from the click, before any await
     browser.permissions.request({ 'origins': dead_links_page.origins }).then(function(granted) {
         if (!granted) {
@@ -340,8 +349,19 @@ dead_links_page.start_check = function(only_problems) {
         dead_links_page.render_access(true)
         return dead_links_page.run(only_problems)
     }).catch(function(error) {
+        // never fail silently: say why nothing happened
         log('dead_links_page.start_check -> error', error)
         dead_links_page.set_busy(false)
+
+        const message = (error && error.message) ? error.message : String(error)
+        let text = "Couldn't start the check: " + message
+
+        if (/manifest/i.test(message)) {
+            // e.g. "Only permissions specified in the manifest may be requested": an older manifest is still loaded
+            text += ' Reload the extension (the reload arrow on its card in the extensions page), then try again.'
+        } // if
+
+        status.textContent = text
     })
 } // dead_links_page.start_check
 

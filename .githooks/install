@@ -1,6 +1,7 @@
 #!/bin/sh
-# Make this clone write deploy/build-info.json after every git switch, pull/merge and rebase (D20).
-# Adds one line to the clone's own post-checkout, post-merge and post-rewrite hooks, keeping anything already there.
+# Make this clone write deploy/build-info.json after every git switch, pull/merge, rebase and commit (D20).
+# Adds one line to the clone's own post-checkout, post-merge, post-rewrite and post-commit hooks, keeping anything
+# already there. (post-commit also covers a merge finished by hand after resolving conflicts: post-merge doesn't run then.)
 # It does not set core.hooksPath (that would switch off every other hook, such as a pre-commit check) and does not
 # touch pre-commit. Safe to run more than once.  Usage: sh .githooks/install
 top=$(git rev-parse --show-toplevel) || exit 1
@@ -9,7 +10,7 @@ case "$hooks" in /*) ;; *) hooks="$top/$hooks" ;; esac
 mkdir -p "$hooks"
 # skips quietly on branches that don't have the script
 line='f="$(git rev-parse --show-toplevel)/.githooks/write-build-info"; [ -f "$f" ] && sh "$f"; true # sprucemarks build-info (D20)'
-for name in post-checkout post-merge post-rewrite; do
+for name in post-checkout post-merge post-rewrite post-commit; do
     file="$hooks/$name"
     if [ ! -f "$file" ]; then
         printf '#!/bin/sh\n' > "$file"

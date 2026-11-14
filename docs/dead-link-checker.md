@@ -27,6 +27,9 @@ double the upkeep.
 - Clicking **Check Links** calls `browser.permissions.request({ origins: [...] })` (it must come from that click). If
   the user declines, show one line explaining why the access is needed and leave everything else working.
 - A **Revoke website access** link calls `browser.permissions.remove`, for anyone who wants it gone after a check.
+- Check Links never fails silently: if the request is refused (for example "Only permissions specified in the
+  manifest may be requested", which happens when an older manifest is still loaded after a branch switch), the status
+  line says so and suggests reloading the extension.
 - The extension's own `browser` polyfill (`js/browser-polyfill.js`) only wraps the APIs it uses, so `permissions` and
   `bookmarks.update` were added to it.
 

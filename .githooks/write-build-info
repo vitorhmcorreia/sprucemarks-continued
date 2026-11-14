@@ -1,6 +1,6 @@
 #!/bin/sh
 # Write deploy/build-info.json (git-ignored) with the commit the working copy is on, so the About page can show which
-# build is loaded. Called from the post-checkout, post-merge and post-rewrite hooks that .githooks/install sets up, for machines that load deploy/
+# build is loaded. Called from the post-checkout, post-merge, post-rewrite and post-commit hooks that .githooks/install sets up, for machines that load deploy/
 # without running "node build.js" (which writes the same file). DECISIONS D20.
 # Enable once per clone:  sh .githooks/install   (adds a line to this clone's hooks; does not use core.hooksPath)
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0

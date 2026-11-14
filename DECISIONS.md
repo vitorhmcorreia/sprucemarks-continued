@@ -220,7 +220,9 @@ any other hook, such as a pre-commit scan for personal data (caught when the fir
 The first appending installer (merged in #3) left new or empty hooks without the line, because `grep -v` exits 1
 when nothing is left and that skipped the copy; About kept showing the branch from the moment the installer ran. Fixed
 in #4, together with `test/hooks-install.sh`, which checks the hook files and that a switch and a merge really
-rewrite the file (it fails 7 of 13 checks on the old installer), and now runs in CI. In `deploy/` it
+rewrite the file (it fails 7 of 13 checks on the old installer), and now runs in CI. Bringing `main` into the
+Dead Links branch then showed that a merge finished by hand (after resolving conflicts) runs `post-commit`, not
+`post-merge`, so the installer also adds the line to `post-commit`, which keeps About current after any commit. In `deploy/` it
 is git-ignored; store zips and GitHub releases include it, so a store install shows the exact commit it came from.
 
 Considered: committing the commit ID in `deploy/` (a commit can't contain its own ID; writing the previous one would
