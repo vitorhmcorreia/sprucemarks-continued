@@ -122,6 +122,21 @@ Update with no new permissions (still only "bookmarks" and "storage"). Changes: 
 
 Submit only after 2026.11.14.1 is published: a new submission replaces one still in review and restarts its review.
 
+GitHub release notes (the annotated tag's message; the Release workflow publishes it):
+
+```
+**Sprucemarks Continued 2026.11.15.0**: Dead Links.
+
+- **New Dead Links page**: find favorites whose page no longer exists, has moved, or could not be verified, then update, ignore, or remove them.
+- **Asks first, checks politely**: nothing is checked until you click Check Links, and website access is requested only then (optional permission, revocable on the page). Checks go straight from your browser to each site, without cookies, at most 5 requests a second and 1.5 s apart per site, backing off when a site asks.
+- **Safe removal**: only "not found" is pre-ticked, and removing first saves a backup file you can import in any browser.
+- **Filters**: by result and by site, Select All, Recheck Problems, Start over.
+
+Required permissions are unchanged (bookmarks, storage). Store users get this automatically once Microsoft approves the update.
+
+**Install manually** (Chrome, Edge, Brave, Opera, Vivaldi): download the zip below, unzip it into a folder you'll keep, open your browser's extensions page, turn on Developer mode, and choose **Load unpacked**. Full steps in the [README](https://github.com/vitorhmcorreia/sprucemarks-continued#install).
+```
+
 - Permissions: add the justification for the optional host permissions (above).
 - Description: replace with the updated one above.
 - Screenshots: replace `3-duplicates.png` with `3-dead-links.png`, and replace `1-options.png`, `5-preferences-dark.png`
