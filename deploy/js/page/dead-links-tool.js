@@ -426,6 +426,36 @@ dead_links_page.toggle_ignore = async function(id) {
     dead_links_page.render()
 } // dead_links_page.toggle_ignore
 
+dead_links_page.start_over = async function() {
+    /*
+    Forget everything from earlier checks: results, ticks, the last-run summary and the ignore list. Favorites are not
+    touched. Asks first, since the ignore list may hold choices the user made by hand.
+    */
+
+    const state = dead_links_page.state
+    const results = Object.keys(state.results).length
+    const ignored = state.ignored.length
+    const count = (n) => n + ' ' + dead_links_page.word(n !== 1) // "1 favorite", "2 favorites"
+
+    let question = 'Start over? This forgets the results of earlier checks'
+    question += results > 0 ? ' (' + count(results) + ' listed)' : ''
+    question += ignored > 0 ? ' and your ignore list (' + count(ignored) + ')' : ''
+    question += '. Your ' + dead_links_page.word(true) + ' themselves are not changed.'
+
+    if (!window.confirm(question)) {
+        return
+    } // if
+
+    state.results = {}
+    state.ignored = []
+    state.last_run = null
+    dead_links_page.selected = {}
+    dead_links_page.show_ignored = false
+
+    await dead_links_page.save()
+    dead_links_page.render()
+} // dead_links_page.start_over
+
 dead_links_page.revoke = async function() {
     try {
         await browser.permissions.remove({ 'origins': dead_links_page.origins })
@@ -444,6 +474,7 @@ dead_links_page.set_busy = function(busy) {
     e.button_check.classList.toggle('hidden', busy)
     e.button_recheck.classList.toggle('hidden', busy)
     e.button_stop.classList.toggle('hidden', !busy)
+    e.button_start_over.classList.toggle('hidden', busy)
     e.skip_local.disabled = busy
     if (busy) {
         e.button_remove.disabled = true
@@ -467,6 +498,7 @@ dead_links_page.render_buttons = function() {
 
     e.button_recheck.disabled = problems.length === 0
     e.button_remove.disabled = !Object.keys(dead_links_page.selected).some(id => dead_links_page.selected[id] && state.results[id])
+    e.button_start_over.disabled = !state.last_run && Object.keys(state.results).length === 0 && state.ignored.length === 0
 } // dead_links_page.render_buttons
 
 dead_links_page.time_ago = function(when) {
@@ -587,6 +619,7 @@ dead_links_page.start = async function() {
     e.button_recheck = root.querySelector('#button-recheck-links')
     e.button_stop = root.querySelector('#button-stop-links')
     e.button_remove = root.querySelector('#button-remove-dead-links')
+    e.button_start_over = root.querySelector('#button-start-over')
     e.show_ignored = root.querySelector('.dead-links-show-ignored')
     e.revoke = root.querySelector('.dead-links-revoke')
     e.template_row = document.getElementById('template-dead-links-grid-row')
@@ -612,6 +645,7 @@ dead_links_page.start = async function() {
     e.button_recheck.addEventListener('click', function(event) { event.preventDefault(); dead_links_page.start_check(true) })
     e.button_stop.addEventListener('click', function(event) { event.preventDefault(); dead_links_page.stop_check() })
     e.button_remove.addEventListener('click', function(event) { event.preventDefault(); dead_links_page.remove_selected() })
+    e.button_start_over.addEventListener('click', function(event) { event.preventDefault(); dead_links_page.start_over() })
 
     e.show_ignored.addEventListener('click', function(event) {
         event.preventDefault()

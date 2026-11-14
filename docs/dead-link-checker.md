@@ -16,7 +16,9 @@ Its own **Dead Links** page in the navigation, next to Tools (changed from a Too
 Tools page runs its duplicate, similar and empty-folder scans every time it opens, which is already slow on very large
 collections; a separate page keeps the checker out of that, never starts anything on its own, and gives a long check a
 tab of its own. The page has a description, the skip-local option, a status line, a results table (Title, Location,
-URL, Result, Select), and **Check Links**, **Recheck Problems**, **Stop** and **Remove Selected** buttons. No separate
+URL, Result, Select), and **Check Links**, **Recheck Problems**, **Stop**, **Remove Selected** and **Start Over**
+buttons. Start Over (asked for by the user, 2026-11-14) forgets results, ticks, the last-run line and the ignore list,
+after a confirmation that says how much; favorites are never touched. No separate
 extension (discussed 2026-11-14): cleaning up favorites is the extension's single purpose, and a second listing would
 double the upkeep.
 

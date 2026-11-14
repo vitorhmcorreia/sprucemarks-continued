@@ -99,7 +99,7 @@
                                 </p>
 
                                 <div>
-                                    <input id="button-check-links" type="button" value="Check Links" class="smaller"><input id="button-recheck-links" type="button" value="Recheck Problems" class="smaller" disabled><input id="button-stop-links" type="button" value="Stop" class="smaller hidden"><input id="button-remove-dead-links" type="button" value="Remove Selected" class="smaller" disabled>
+                                    <input id="button-check-links" type="button" value="Check Links" class="smaller"><input id="button-recheck-links" type="button" value="Recheck Problems" class="smaller" disabled><input id="button-stop-links" type="button" value="Stop" class="smaller hidden"><input id="button-remove-dead-links" type="button" value="Remove Selected" class="smaller" disabled><input id="button-start-over" type="button" value="Start Over" class="smaller" disabled>
                                 </div>
                             </div><!-- tool-control -->
                         </div><!-- tool-content -->
