@@ -855,26 +855,38 @@ const listener_port_message = local.function.listener_port_message = function li
             local.preference = obj.preference
             local.setting    = obj.setting
 
+            const timings = [] // how long drawing each section took, sent to the background log (D18)
+            let t = performance.now()
+
             // empty folders
             tool_empty_folders_process(obj.empty_folders)
             tool_empty_folders_button()
             tool_empty_folders_display()
+            timings.push(timing('tools page open: draw empty folders', t, Object.keys(obj.empty_folders || {}).length + ' found'))
+            t = performance.now()
 
             // duplicate bookmarks
             tool_duplicate_bookmarks_process(obj.duplicate_bookmarks)
             tool_duplicate_bookmarks_button()
             tool_duplicate_bookmarks_display()
+            timings.push(timing('tools page open: draw duplicates', t, Object.keys(obj.duplicate_bookmarks || {}).length + ' groups'))
+            t = performance.now()
 
             // similar bookmarks
             tool_similar_bookmarks_process(obj.similar_bookmarks)
             tool_similar_bookmarks_button()
             tool_similar_bookmarks_display()
+            timings.push(timing('tools page open: draw similar', t, Object.keys(obj.similar_bookmarks || {}).length + ' groups'))
+            t = performance.now()
 
             // bookmark history
             tool_bookmark_history_process(obj.bookmark_history)
             tool_bookmark_history_button()
             tool_bookmark_history_display()
             tool_bookmark_history_time()
+            timings.push(timing('tools page open: draw history', t, (obj.bookmark_history || []).length + ' entries'))
+
+            timing_send(timings)
 
             start_continue()
 
@@ -903,29 +915,41 @@ const listener_port_message = local.function.listener_port_message = function li
         case 'refresh-tools':
             log('listener_port_message -> refresh-tools')
 
+            const refresh_timings = [] // see init-tools
+            let t_refresh = performance.now()
+
             // empty folders
             tool_empty_folders_process(obj.empty_folders)
             tool_empty_folders_button() // run early in case the display function takes awhile
             tool_empty_folders_display()
             tool_empty_folders_button() // run again in case any folders were unchecked
+            refresh_timings.push(timing('tools page refresh: draw empty folders', t_refresh, Object.keys(obj.empty_folders || {}).length + ' found'))
+            t_refresh = performance.now()
 
             // duplicate bookmarks
             tool_duplicate_bookmarks_process(obj.duplicate_bookmarks)
             tool_duplicate_bookmarks_button() // run early in case the display function takes awhile
             tool_duplicate_bookmarks_display()
             tool_duplicate_bookmarks_button() // run again in case any bookmarks were unchecked
+            refresh_timings.push(timing('tools page refresh: draw duplicates', t_refresh, Object.keys(obj.duplicate_bookmarks || {}).length + ' groups'))
+            t_refresh = performance.now()
 
             // similar bookmarks
             tool_similar_bookmarks_process(obj.similar_bookmarks)
             tool_similar_bookmarks_button() // run early in case the display function takes awhile
             tool_similar_bookmarks_display()
             tool_similar_bookmarks_button() // run again in case any bookmarks were unchecked
+            refresh_timings.push(timing('tools page refresh: draw similar', t_refresh, Object.keys(obj.similar_bookmarks || {}).length + ' groups'))
+            t_refresh = performance.now()
 
             // bookmark history
             tool_bookmark_history_process(obj.bookmark_history)
             tool_bookmark_history_button()
             tool_bookmark_history_display()
             tool_bookmark_history_time()
+            refresh_timings.push(timing('tools page refresh: draw history', t_refresh, (obj.bookmark_history || []).length + ' entries'))
+
+            timing_send(refresh_timings)
 
             break
         case 'tool-bookmark-history':
@@ -988,6 +1012,20 @@ const locale_compare = local.function.locale_compare = new Intl.Collator('en-US'
     sensitivity: 'variant',
     usage: 'sort'
 }).compare // alias function
+
+const timing_send = local.function.timing_send = function timing_send(entries) {
+    /*
+    Send timings measured on this page to the background service worker, which keeps the log (D18).
+
+    @param  {Object}  entries  Array of timing entries from timing() in shared.js.
+    */
+
+    try {
+        local.port.postMessage({ 'subject': 'timing', 'entries': entries })
+    } catch (error) {
+        log('timing_send -> error', error)
+    } // try
+} // timing_send
 
 const port_connect = local.function.port_connect = function port_connect() {
     /*

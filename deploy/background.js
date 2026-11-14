@@ -232,10 +232,14 @@ const shared = {
 
         // time_remove_precision
         // time_to_tick
+
+        // timing
+        // timing_summary
     },
     'setting': { // settings used internally, not customizable by the user
         'log': true // verbose logging for development, make sure this is false when publishing for end users
     },
+    'timing': [], // recent timings in this context, newest last: { name, ms, detail, when }, see timing()
     'timer': { // setTimeout references
         'theme_monitor': '' // will become a setTimeout call to run theme_monitor() every 10 seconds
     },
@@ -807,6 +811,72 @@ const theme_monitor = shared.function.theme_monitor = function theme_monitor() {
     shared.timer.theme_monitor = setTimeout(theme_monitor, 10000) // 10 seconds
 } // theme_monitor
 
+const timing = shared.function.timing = function timing(name, started, detail) {
+    /*
+    Record how long something took (D18). Keeps the newest 200 timings in shared.timing; the background service worker
+    saves them and the About page summarizes them in Troubleshooting.
+
+    @param   {String}  name      Short name like "tools: find duplicates".
+    @param   {Number}  started   performance.now() taken when the work began.
+    @param   {*}       [detail]  Optional context such as a bookmark count.
+    @return  {Object}            The entry: { name, ms, detail, when }.
+    */
+
+    const entry = {
+        'name'  : name,
+        'ms'    : Math.round(performance.now() - started),
+        'detail': (detail === undefined) ? '' : String(detail),
+        'when'  : Date.now()
+    } // entry
+
+    shared.timing.push(entry)
+
+    if (shared.timing.length > 200) {
+        shared.timing.splice(0, shared.timing.length - 200)
+    } // if
+
+    log('timing -> ' + name + ' ' + entry.ms + ' ms' + (entry.detail ? ' (' + entry.detail + ')' : ''))
+
+    return entry
+} // timing
+
+const timing_summary = shared.function.timing_summary = function timing_summary(entries) {
+    /*
+    Summarize timings per name, slowest first.
+
+    @param   {Object}  entries  Array of timing entries.
+    @return  {Object}           Array of { name, runs, average, slowest, last_ms, last_when, detail } sorted by slowest.
+    */
+
+    const by_name = {}
+
+    for (const entry of entries || []) {
+        const item = by_name[entry.name] || (by_name[entry.name] = { 'name': entry.name, 'runs': 0, 'total': 0, 'slowest': 0, 'last_ms': 0, 'last_when': 0, 'detail': '' })
+
+        item.runs += 1
+        item.total += entry.ms
+        item.slowest = Math.max(item.slowest, entry.ms)
+
+        if (entry.when >= item.last_when) {
+            item.last_ms = entry.ms
+            item.last_when = entry.when
+            item.detail = entry.detail
+        } // if
+    } // for
+
+    return Object.values(by_name).map(function(item) {
+        return {
+            'name'     : item.name,
+            'runs'     : item.runs,
+            'average'  : Math.round(item.total / item.runs),
+            'slowest'  : item.slowest,
+            'last_ms'  : item.last_ms,
+            'last_when': item.last_when,
+            'detail'   : item.detail
+        }
+    }).sort((a, b) => b.slowest - a.slowest)
+} // timing_summary
+
 const time_remove_precision = shared.function.time_remove_precision = function time_remove_precision(time) {
     /*
     Remove the last three digits of precision.
@@ -1027,7 +1097,11 @@ const local = {
     },
     'timer': { // setTimeout references
         'refresh_about': '', // will become a setTimeout call to run refresh_about() when needed
-        'refresh_tools': ''  // will become a setTimeout call to run refresh_tools() when needed
+        'refresh_tools': '', // will become a setTimeout call to run refresh_tools() when needed
+        'timing_save'  : ''  // will become a setTimeout call to save shared.timing, see timing_record()
+    },
+    'timing': { // performance timing, see timing_record() and DECISIONS D18
+        'changes_since_refresh': 0 // bookmark changes that asked for a Tools refresh since the last one actually ran
     },
     'tool': { // default states which may get replaced with values from storage
         'bookmark_history': [
@@ -1707,6 +1781,8 @@ const bookmark_resort = local.function.bookmark_resort = async function bookmark
 
         log('bookmark_resort -> resort begin')
 
+        const t_resort = performance.now()
+
         try {
             const bookmarks = await bookmark_get_children(bookmark_root())
 
@@ -1722,6 +1798,8 @@ const bookmark_resort = local.function.bookmark_resort = async function bookmark
         } // try
 
         log('bookmark_resort -> resort end')
+
+        timing_record('sort: all favorites', t_resort)
 
         // set resort_active to false so listener functions can resume normal duties
         local.status.resort_active = false
@@ -2401,6 +2479,7 @@ const listener_port_message = local.function.listener_port_message = async funct
                 'setting'        : {
                     'show_message': local.setting.show_message
                 },
+                'timing' : shared.timing,
                 'version': local.version
             })
 
@@ -2441,30 +2520,36 @@ const listener_port_message = local.function.listener_port_message = async funct
         case 'init-tools': {
             log('listener_port_message -> init-tools')
 
-            const tree = await bookmark_get_tree()
-
-            const duplicate_bookmarks = await tool_duplicate_bookmarks_find(tree)
-
-            const empty_folders = await tool_empty_folders_find(tree)
-
-            const similar_bookmarks = await tool_similar_bookmarks_find(tree)
+            const scan = await timing_tools_scan('open')
 
             port.postMessage({
                 'subject'            : 'init-tools',
                 'bookmark_history'   : local.tool.bookmark_history,
-                'duplicate_bookmarks': duplicate_bookmarks,
-                'empty_folders'      : empty_folders,
+                'duplicate_bookmarks': scan.duplicate_bookmarks,
+                'empty_folders'      : scan.empty_folders,
                 'preference'         : local.preference,
                 'setting'            : {
                     'show_message': local.setting.show_message
                 },
-                'similar_bookmarks'  : similar_bookmarks
+                'similar_bookmarks'  : scan.similar_bookmarks
             })
 
             show_message_relayed()
 
             break
         } // init-tools
+        case 'timing':
+            // timings measured on a page (for example how long the Tools page took to draw its results)
+            for (const entry of obj.entries || []) {
+                if (entry && typeof entry.name === 'string' && typeof entry.ms === 'number') {
+                    shared.timing.push({ 'name': entry.name, 'ms': entry.ms, 'detail': String(entry.detail || ''), 'when': entry.when || Date.now() })
+                } // if
+            } // for
+
+            shared.timing.splice(0, Math.max(0, shared.timing.length - 200))
+            timing_save_soon()
+
+            break
         case 'link-sprucemarks': {
             // content script would like to open an extension page
 
@@ -2903,20 +2988,26 @@ const refresh_about = local.function.refresh_about = async function refresh_abou
             // send a message to this about page
             port.postMessage({
                 'subject': 'refresh-about',
-                'bookmark_hashes': bookmark_hashes
+                'bookmark_hashes': bookmark_hashes,
+                'timing': shared.timing
             })
         } // if
     } // for
 } // refresh_about
 
-const refresh_tools = local.function.refresh_tools = async function refresh_tools(force) {
+const refresh_tools = local.function.refresh_tools = async function refresh_tools(force, retry) {
     /*
     Send a "refresh-tools" message to any connected tools page. Throttle messaging so messages will not be sent more than twice a second. Override throttling with the force parameter.
 
     @param  {Boolean}  [force]  Optional. If true, ignore any throttling and force a refresh. Defaults to false.
+    @param  {Boolean}  [retry]  Internal: true when called again by the throttling timer, so it isn't counted as a change.
     */
 
     force = force || false
+
+    if (retry !== true) {
+        local.timing.changes_since_refresh += 1
+    } // if
 
     clearTimeout(local.timer.refresh_tools)
 
@@ -2933,7 +3024,7 @@ const refresh_tools = local.function.refresh_tools = async function refresh_tool
         // log('refresh_tools -> not enough time has passed, will try again in 100 ms')
 
         // try again in 0.1 seconds
-        local.timer.refresh_tools = setTimeout(refresh_tools, 100)
+        local.timer.refresh_tools = setTimeout(function() { refresh_tools(false, true) }, 100)
 
         return 'early'
     } // if
@@ -2941,13 +3032,7 @@ const refresh_tools = local.function.refresh_tools = async function refresh_tool
     // save the current time for throttling purposes
     local.last_time.refresh_tools = now
 
-    const tree = await bookmark_get_tree()
-
-    const duplicate_bookmarks = await tool_duplicate_bookmarks_find(tree)
-
-    const empty_folders = await tool_empty_folders_find(tree)
-
-    const similar_bookmarks = await tool_similar_bookmarks_find(tree)
+    const scan = await timing_tools_scan('refresh')
 
     for (let index = 0; index < local.port.length; index++) {
         const port = local.port[index]
@@ -2957,9 +3042,9 @@ const refresh_tools = local.function.refresh_tools = async function refresh_tool
             port.postMessage({
                 'subject'            : 'refresh-tools',
                 'bookmark_history'   : local.tool.bookmark_history,
-                'duplicate_bookmarks': duplicate_bookmarks,
-                'empty_folders'      : empty_folders,
-                'similar_bookmarks'  : similar_bookmarks
+                'duplicate_bookmarks': scan.duplicate_bookmarks,
+                'empty_folders'      : scan.empty_folders,
+                'similar_bookmarks'  : scan.similar_bookmarks
             })
         } // if
     } // for
@@ -3002,6 +3087,8 @@ const start = local.function.start = async function start() {
     local.status.sprucemarks_active = true
 
     await shared_start() // from shared.js
+
+    await timing_load()
 
     url_setup()
 
@@ -3871,6 +3958,104 @@ const tool_similar_bookmarks_remove = local.function.tool_similar_bookmarks_remo
         await bookmark_remove(id)
     } // for
 } // tool_similar_bookmarks_remove
+
+const timing_bookmark_count = local.function.timing_bookmark_count = function timing_bookmark_count(tree) {
+    /*
+    Count bookmarks (not folders) in a bookmark tree, for timing details.
+
+    @param   {Object}  tree  BookmarkTreeNode.
+    @return  {Number}
+    */
+
+    let count = 0
+    const stack = [tree]
+
+    while (stack.length > 0) {
+        const node = stack.pop()
+
+        if (node.url !== undefined) {
+            count += 1
+        } else if (node.children) {
+            stack.push(...node.children)
+        } // if
+    } // while
+
+    return count
+} // timing_bookmark_count
+
+const timing_load = local.function.timing_load = async function timing_load() {
+    /*
+    Restore saved timings, so the log survives the service worker being stopped and restarted.
+    */
+
+    const saved = await storage_get('timing_log')
+
+    if (Array.isArray(saved)) {
+        shared.timing.unshift(...saved.slice(-200))
+        shared.timing.splice(0, Math.max(0, shared.timing.length - 200))
+    } // if
+} // timing_load
+
+const timing_record = local.function.timing_record = function timing_record(name, started, detail) {
+    /*
+    Record a timing (shared.js timing()) and save the log a moment later.
+    */
+
+    timing(name, started, detail) // from shared.js
+
+    timing_save_soon()
+} // timing_record
+
+const timing_save_soon = local.function.timing_save_soon = function timing_save_soon() {
+    /*
+    Save shared.timing to storage two seconds from now, once for a burst of timings.
+    */
+
+    clearTimeout(local.timer.timing_save)
+
+    local.timer.timing_save = setTimeout(function() {
+        storage_set({ 'timing_log': shared.timing })
+    }, 2000)
+} // timing_save_soon
+
+const timing_tools_scan = local.function.timing_tools_scan = async function timing_tools_scan(label) {
+    /*
+    Run the three Tools scans over the whole tree and time each step.
+
+    @param   {String}  label  "open" (Tools page opened) or "refresh" (favorites changed while Tools is open).
+    @return  {Object}         { duplicate_bookmarks, empty_folders, similar_bookmarks }
+    */
+
+    const t_total = performance.now()
+
+    let t = performance.now()
+    const tree = await bookmark_get_tree()
+    const count = timing_bookmark_count(tree[0] || tree)
+    timing_record('tools ' + label + ': read tree', t, count + ' bookmarks')
+
+    t = performance.now()
+    const duplicate_bookmarks = await tool_duplicate_bookmarks_find(tree)
+    timing_record('tools ' + label + ': find duplicates', t)
+
+    t = performance.now()
+    const empty_folders = await tool_empty_folders_find(tree)
+    timing_record('tools ' + label + ': find empty folders', t)
+
+    t = performance.now()
+    const similar_bookmarks = await tool_similar_bookmarks_find(tree)
+    timing_record('tools ' + label + ': find similar', t)
+
+    let detail = count + ' bookmarks'
+
+    if (label === 'refresh') {
+        detail += ', ' + local.timing.changes_since_refresh + ' changes since the last refresh'
+        local.timing.changes_since_refresh = 0
+    } // if
+
+    timing_record('tools ' + label + ': all scans', t_total, detail)
+
+    return { 'duplicate_bookmarks': duplicate_bookmarks, 'empty_folders': empty_folders, 'similar_bookmarks': similar_bookmarks }
+} // timing_tools_scan
 
 const url_setup = local.function.url_setup = function url_setup() {
     /*
