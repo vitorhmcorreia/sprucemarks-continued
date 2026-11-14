@@ -151,10 +151,17 @@
 
                             <p class="dead-links-status">Not checked yet.</p>
 
-                            <label class="dead-links-filter hidden">
-                                <span>Show</span>
-                                <select id="dead-links-filter"></select>
-                            </label>
+                            <div class="dead-links-filters">
+                                <label class="dead-links-filter hidden">
+                                    <span>Show</span>
+                                    <select id="dead-links-filter"></select>
+                                </label>
+
+                                <label class="dead-links-site-filter hidden">
+                                    <span>Site</span>
+                                    <select id="dead-links-site-filter"></select>
+                                </label>
+                            </div>
 
                             <div class="grid-area">
                                 <div class="grid">
@@ -176,10 +183,11 @@
                                 <p>
                                     <a href class="dead-links-show-ignored hidden">Show ignored</a>
                                     <a href class="dead-links-revoke hidden">Revoke website access</a>
+                                    <a href id="button-start-over" class="hidden">Start over</a>
                                 </p>
 
                                 <div>
-                                    <input id="button-check-links" type="button" value="Check Links" class="smaller"><input id="button-recheck-links" type="button" value="Recheck Problems" class="smaller" disabled><input id="button-stop-links" type="button" value="Stop" class="smaller hidden"><input id="button-remove-dead-links" type="button" value="Remove Selected" class="smaller" disabled><input id="button-start-over" type="button" value="Start Over" class="smaller" disabled>
+                                    <input id="button-check-links" type="button" value="Check Links" class="smaller"><input id="button-recheck-links" type="button" value="Recheck Problems" class="smaller" disabled><input id="button-stop-links" type="button" value="Stop" class="smaller hidden"><input id="button-select-all-links" type="button" value="Select All" class="smaller" disabled><input id="button-remove-dead-links" type="button" value="Remove Selected" class="smaller" disabled>
                                 </div>
                             </div><!-- tool-control -->
                         </div><!-- tool-content -->

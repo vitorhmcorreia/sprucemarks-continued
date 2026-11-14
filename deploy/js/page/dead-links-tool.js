@@ -23,6 +23,8 @@ const dead_links_page = {
     'selected'    : {},    // bookmark id: true, for the Remove button
     'show_ignored': false,
     'filter'      : 'all', // result shown in the table ('all' or a result like 'not_found'), see render_filter()
+    'site_filter' : 'all', // site shown in the table ('all' or a site like 'youtube.com'), see render_filter()
+    'shown'       : [],    // bookmark ids currently in the table, for Select All
     'running'     : null,  // queue while a check runs
     'element'     : {}
 } // dead_links_page
@@ -254,6 +256,7 @@ dead_links_page.run = async function(only_problems) {
         state.results = {}
         dead_links_page.selected = {}
         dead_links_page.filter = 'all'
+        dead_links_page.site_filter = 'all'
     } // if
 
     dead_links_page.set_busy(true)
@@ -502,6 +505,7 @@ dead_links_page.start_over = async function() {
     dead_links_page.selected = {}
     dead_links_page.show_ignored = false
     dead_links_page.filter = 'all'
+    dead_links_page.site_filter = 'all'
 
     await dead_links_page.save()
     dead_links_page.render()
@@ -525,7 +529,10 @@ dead_links_page.set_busy = function(busy) {
     e.button_check.classList.toggle('hidden', busy)
     e.button_recheck.classList.toggle('hidden', busy)
     e.button_stop.classList.toggle('hidden', !busy)
-    e.button_start_over.classList.toggle('hidden', busy)
+    if (busy) {
+        e.button_start_over.classList.add('hidden') // render_buttons() shows it again when the check ends
+    } // if
+    e.button_select_all.classList.toggle('hidden', busy)
     e.skip_local.disabled = busy
     if (busy) {
         e.button_remove.disabled = true
@@ -554,8 +561,17 @@ dead_links_page.render_buttons = function() {
     const problems = Object.keys(state.results).filter(id => state.ignored.indexOf(id) < 0)
 
     e.button_recheck.disabled = problems.length === 0
-    e.button_remove.disabled = !Object.keys(dead_links_page.selected).some(id => dead_links_page.selected[id] && state.results[id])
-    e.button_start_over.disabled = !state.last_run && Object.keys(state.results).length === 0 && state.ignored.length === 0
+    const ticked = Object.keys(dead_links_page.selected).filter(id => dead_links_page.selected[id] && state.results[id]).length
+    e.button_remove.disabled = ticked === 0
+    e.button_remove.value = ticked > 0 ? 'Remove Selected (' + ticked + ')' : 'Remove Selected'
+
+    // Select All ticks every row in the table; when they are all ticked it becomes Select None
+    const selectable = dead_links_page.show_ignored ? [] : dead_links_page.shown
+    const all_ticked = selectable.length > 0 && selectable.every(id => dead_links_page.selected[id])
+    e.button_select_all.disabled = selectable.length === 0
+    e.button_select_all.value = all_ticked ? 'Select None' : 'Select All' + (selectable.length > 0 ? ' (' + selectable.length + ')' : '')
+    // Start over is a link: shown only when there is something to forget
+    e.button_start_over.classList.toggle('hidden', !state.last_run && Object.keys(state.results).length === 0 && state.ignored.length === 0)
 } // dead_links_page.render_buttons
 
 dead_links_page.time_ago = function(when) {
@@ -588,6 +604,11 @@ dead_links_page.render_status = function() {
 } // dead_links_page.render_status
 
 dead_links_page.order = { 'not_found': 0, 'unreachable': 1, 'moved': 2, 'redirect_home': 3, 'redirect_login': 4, 'unverified': 5, 'server_error': 6, 'timeout': 7 }
+
+dead_links_page.site = function(url) {
+    // group "www.example.com" with "example.com"
+    return dead_links.host(url).replace(/^www\./, '')
+} // dead_links_page.site
 
 dead_links_page.render_filter = function(ids) {
     /*
@@ -630,7 +651,43 @@ dead_links_page.render_filter = function(ids) {
 
     e.filter_label.classList.toggle('hidden', present.length < 2) // nothing to choose between
 
-    const shown = ids.filter(id => dead_links_page.filter === 'all' || state.results[id].result === dead_links_page.filter)
+    const by_result = ids.filter(id => dead_links_page.filter === 'all' || state.results[id].result === dead_links_page.filter)
+
+    // sites among the rows of the chosen result, busiest first
+    const site_counts = {}
+
+    for (const id of by_result) {
+        const site = dead_links_page.site(state.results[id].url)
+        site_counts[site] = (site_counts[site] || 0) + 1
+    } // for
+
+    const sites = Object.keys(site_counts).sort((a, b) => (site_counts[b] - site_counts[a]) || a.localeCompare(b))
+
+    if (dead_links_page.site_filter !== 'all' && site_counts[dead_links_page.site_filter] === undefined) {
+        dead_links_page.site_filter = 'all'
+    } // if
+
+    e.site_filter.textContent = ''
+
+    const add_site = function(value, text) {
+        const option = document.createElement('option')
+        option.value = value
+        option.textContent = text
+        option.selected = (value === dead_links_page.site_filter)
+        e.site_filter.appendChild(option)
+    } // add_site
+
+    add_site('all', 'All sites (' + sites.length + ')')
+
+    for (const site of sites) {
+        add_site(site, site + ' (' + site_counts[site] + ')')
+    } // for
+
+    e.site_filter_label.classList.toggle('hidden', sites.length < 2)
+
+    const shown = by_result.filter(id => dead_links_page.site_filter === 'all' || dead_links_page.site(state.results[id].url) === dead_links_page.site_filter)
+
+    dead_links_page.shown = shown
 
     for (const id of ids) {
         if (shown.indexOf(id) < 0) {
@@ -736,6 +793,9 @@ dead_links_page.start = async function() {
     e.show_ignored = root.querySelector('.dead-links-show-ignored')
     e.filter = root.querySelector('#dead-links-filter')
     e.filter_label = root.querySelector('.dead-links-filter')
+    e.site_filter = root.querySelector('#dead-links-site-filter')
+    e.site_filter_label = root.querySelector('.dead-links-site-filter')
+    e.button_select_all = root.querySelector('#button-select-all-links')
     e.revoke = root.querySelector('.dead-links-revoke')
     e.template_row = document.getElementById('template-dead-links-grid-row')
     e.template_no_results = document.getElementById('template-dead-links-no-results')
@@ -766,11 +826,30 @@ dead_links_page.start = async function() {
         event.preventDefault()
         dead_links_page.show_ignored = !dead_links_page.show_ignored
         dead_links_page.filter = 'all'
+        dead_links_page.site_filter = 'all'
         dead_links_page.render()
     })
 
     e.filter.addEventListener('change', function() {
         dead_links_page.filter = this.value
+        dead_links_page.site_filter = 'all'
+        dead_links_page.render()
+    })
+
+    e.site_filter.addEventListener('change', function() {
+        dead_links_page.site_filter = this.value
+        dead_links_page.render()
+    })
+
+    e.button_select_all.addEventListener('click', function(event) {
+        event.preventDefault()
+        const rows = dead_links_page.shown
+        const all_ticked = rows.length > 0 && rows.every(id => dead_links_page.selected[id])
+
+        for (const id of rows) {
+            dead_links_page.selected[id] = !all_ticked
+        } // for
+
         dead_links_page.render()
     })
 

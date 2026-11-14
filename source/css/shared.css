@@ -714,25 +714,27 @@ label + .option-sort {
 }
 
 #tool-dead-links .tool-control {
-    align-items: center;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column-reverse; /* buttons on their own row, the small links underneath */
 }
 
 #tool-dead-links .tool-control div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
     margin-top: 32px;
-    padding-left: 24px;
-    text-align: right;
 }
 
-#tool-dead-links .tool-control input + input {
-    margin-left: 8px;
+#tool-dead-links .tool-control p {
+    margin: 16px 0 0;
 }
 
 #tool-dead-links .tool-control a {
     display: inline-block;
-    margin-right: 16px;
+    margin-right: 24px;
     padding: 2px 0;
+    white-space: nowrap;
 }
 
 #tool-dead-links .dead-links-option {
@@ -743,11 +745,26 @@ label + .option-sort {
     margin: 24px 0 0;
 }
 
-#tool-dead-links .dead-links-filter {
+#tool-dead-links .dead-links-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 32px;
+    margin: 16px 0 0;
+}
+
+#tool-dead-links .dead-links-filters select {
+    background-position: right 10px center;
+    max-width: 360px;
+    min-width: 128px;
+    padding-right: 34px;
+    width: auto;
+}
+
+#tool-dead-links .dead-links-filter,
+#tool-dead-links .dead-links-site-filter {
     align-items: center;
     display: flex;
     gap: 12px;
-    margin: 16px 0 0;
 }
 
 #tool-dead-links .dead-links-status {
