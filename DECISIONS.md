@@ -190,7 +190,11 @@ doesn't change between commits. `build-info.json` (commit, branch or tag, commit
 next to the manifest by `node build.js`, and after every switch, pull or rebase by a line that `sh .githooks/install`
 adds to the clone's own post-checkout, post-merge and post-rewrite hooks, for machines without Node. The installer
 appends instead of setting `core.hooksPath`: that setting replaces the whole hooks folder and would silently switch off
-any other hook, such as a pre-commit scan for personal data (caught when the first version tried to use it). In `deploy/` it
+any other hook, such as a pre-commit scan for personal data (caught when the first version tried to use it).
+The first appending installer (merged in #3) left new or empty hooks without the line, because `grep -v` exits 1
+when nothing is left and that skipped the copy; About kept showing the branch from the moment the installer ran. Fixed
+in #4, together with `test/hooks-install.sh`, which checks the hook files and that a switch and a merge really
+rewrite the file (it fails 7 of 13 checks on the old installer), and now runs in CI. In `deploy/` it
 is git-ignored; store zips and GitHub releases include it, so a store install shows the exact commit it came from.
 
 Considered: committing the commit ID in `deploy/` (a commit can't contain its own ID; writing the previous one would

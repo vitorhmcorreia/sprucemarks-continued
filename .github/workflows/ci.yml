@@ -36,6 +36,9 @@ jobs:
           grep -q "'log': false" dist/package/js/shared.js
           if grep -q "local.test.function" dist/package/background.js; then echo "::error::test suite leaked into the release build"; exit 1; fi
 
+      - name: Git hook installer (build-info, D20)
+        run: sh test/hooks-install.sh
+
       - name: Install Chrome for Testing
         # branded Chrome ignores --load-extension since 137; Chrome for Testing still loads unpacked extensions
         run: |

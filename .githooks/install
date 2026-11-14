@@ -21,11 +21,19 @@ for name in post-checkout post-merge post-rewrite; do
     fi
     # our line goes right after the first line (#!...), so an "exit" later in an existing hook can't skip it;
     # an older copy of our line is dropped, everything else is kept in order
+    # (grep -v exits 1 when nothing is left, as with a new hook: "|| true" keeps that from skipping the copy)
+    tmp="$file.sprucemarks-tmp"
     {
         head -n 1 "$file"
         printf '%s\n' "$line"
-        tail -n +2 "$file" | grep -v 'sprucemarks build-info'
-    } > "$file.tmp" && cat "$file.tmp" > "$file" && rm -f "$file.tmp"
+        tail -n +2 "$file" | grep -v 'sprucemarks build-info' || true
+    } > "$tmp"
+    cat "$tmp" > "$file"
+    rm -f "$tmp" "$file.tmp" # $file.tmp: left behind by the first version of this script
+    if ! grep -q 'sprucemarks build-info' "$file"; then
+        echo "could not add the line to $file" >&2
+        exit 1
+    fi
     chmod +x "$file"
 done
 sh "$top/.githooks/write-build-info" && echo "wrote deploy/build-info.json"
