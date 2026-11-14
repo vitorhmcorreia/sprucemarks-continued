@@ -99,6 +99,9 @@ notice for people moving from the archived original (D6).
   2. `node build.js`, load `deploy/` unpacked and look it over, commit and push, wait for CI to pass;
   3. `git tag -a v<version> -m "<release notes>"` and `git push origin v<version>`: the Release workflow checks the
      version, runs the tests, builds the zip and publishes the GitHub Release (D12, D15);
-  4. upload that zip (from the release, or `node build.js --no-tests --zip`) to Partner Center.
+  4. upload that zip (from the release, or `node build.js --no-tests --zip`) to Partner Center, with the notes from
+     `store/listing.md` (Updates). Only when no earlier version is still in review: a new submission replaces the one
+     in review and restarts its review (Microsoft, "Update or remove an extension"). Prepare and merge the release PR
+     any time; push the tag when the store is ready for it.
 - Refresh the store images when the UI changed: `node store/make-store-assets.js` (after `node build.js`).
 - Store: Microsoft Edge Add-ons first (D3); what to paste where is in `store/listing.md`. Privacy answers: no data collected, see [PRIVACY.md](PRIVACY.md).

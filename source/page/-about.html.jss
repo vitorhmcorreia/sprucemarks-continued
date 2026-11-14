@@ -90,6 +90,27 @@
 
             <div class="box">
                 <div class="box-inner">
+                    <h3>November 15, 2026 &middot; version 2026.11.15.0</h3>
+
+                    <ul>
+                        <li>
+                            New Dead Links page: find <span class="only-non-edge">bookmarks</span><span class="only-edge">favorites</span> whose page no longer exists, has moved, or could not be verified, then update, ignore, or remove them.
+                        </li>
+                        <li>
+                            Nothing is checked until you click Check Links, and website access is asked for only then. Checks send no cookies and go straight from your browser to each site, at a polite pace.
+                        </li>
+                        <li>
+                            Removing saves a backup file first, which any browser can import to restore what was removed.
+                        </li>
+                        <li>
+                            Filter results by type and by site, select all, recheck only the problems, or start over.
+                        </li>
+                    </ul>
+                </div><!-- box-inner -->
+            </div><!-- box -->
+
+            <div class="box">
+                <div class="box-inner">
                     <h3>November 14, 2026 &middot; version 2026.11.14.1</h3>
 
                     <ul>

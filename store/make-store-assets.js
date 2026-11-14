@@ -37,7 +37,23 @@ const SHOTS = [
             for (const c of [...s.querySelectorAll('input[type=checkbox]')].slice(0, 2)) { if (!c.checked) c.click(); ${wait(400)} }
             [...s.querySelectorAll('select')].slice(0, 2).forEach((x, i) => { x.value = ['alpha', 'date'][i]; x.dispatchEvent(new Event('change', { bubbles: true })) });
             ${wait(800)}; ${scrollTo('s', 110)}`, wait: 2000 },
-    { name: '3-duplicates', url: 'page/light/dark/tools.html', js: scrollTo(`document.getElementById('tool-duplicate-bookmarks')`, 30) },
+    { name: '3-dead-links', url: 'page/light/dark/dead-links.html',
+        // results are filled in (the screenshot browser can't check real websites); same shapes a real check produces
+        js: `const bm = await dead_links_page.bookmarks()
+            const pick = (title) => Object.values(bm).find((b) => b.title === title)
+            const row = (title, result, status, new_url) => { const b = pick(title); return [b.id, { url: b.url, title: b.title, location: b.location, result, status, new_url: new_url || '', dead: result === 'not_found' || result === 'unreachable', preselect: result === 'not_found', checked_at: Date.now() }] }
+            dead_links_page.state.results = Object.fromEntries([
+                row('Sourdough starter guide', 'not_found', 404),
+                row('Wikipedia - Spruce', 'not_found', 410),
+                row('Rome2Rio', 'unreachable', 0),
+                row('Archive.org', 'moved', 200, 'https://archive.org/details/booksbylanguage'),
+                row('MusicBrainz', 'timeout', 0),
+                row('Hacker News', 'unverified', 403)
+            ])
+            dead_links_page.selected = Object.fromEntries(Object.entries(dead_links_page.state.results).filter(([id, r]) => r.preselect).map(([id]) => [id, true]))
+            dead_links_page.state.last_run = { when: Date.now() - 180000, checked: 26, problems: 6, skipped_local: 0, stopped: false }
+            dead_links_page.render()
+            ${scrollTo(`document.querySelector('.dead-links-status')`, 120)}`, wait: 1000 },
     { name: '4-similar', url: 'page/light/dark/tools.html', js: scrollTo(`document.getElementById('tool-similar-bookmarks')`, 30) },
     { name: '5-preferences-dark', url: 'page/light/dark/preferences.html',
         js: `[...document.querySelectorAll('label')].find((l) => l.textContent.trim() === 'Dark').click()`, wait: 3000 },
