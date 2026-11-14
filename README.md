@@ -103,7 +103,7 @@ Run the test suite in a headless browser (Edge or Chromium; set `BROWSER=` to pi
 node build.js && node test/run-tests.js
 ```
 
-Or, with the extension loaded unpacked, run `await test()` in its service worker console (not available in
+`sh test/hooks-install.sh` tests the git hook installer. Or, with the extension loaded unpacked, run `await test()` in its service worker console (not available in
 `--no-tests` builds). CI runs the suite on every push.
 
 ## Privacy

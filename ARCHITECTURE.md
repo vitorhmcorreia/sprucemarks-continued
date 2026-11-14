@@ -26,6 +26,7 @@ build.js                 the build (replaces Feri, see D4)
 art/make-icons.js        regenerates the icons and the page header logo from art/original/ (D10)
 test/run-tests.js        runs the extension's test suite in a headless browser (D15)
 test/browser.js          shared headless-browser helpers and the made-up sample favorites
+test/hooks-install.sh    tests .githooks/install in throwaway repositories (runs in CI)
 .github/workflows/       CI on every push, GitHub Release on every version tag (D15)
 docs/                    design notes for planned features (dead-link checker)
 store/                   Edge listing: listing.md (copy for Partner Center), logo, tiles, screenshots, and
