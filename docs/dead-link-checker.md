@@ -1,7 +1,8 @@
 # Design: dead-link checker
 
-Status: **proposed**, not started. Waiting for the first Edge Add-ons listing to be approved (DECISIONS D8). Written
-2026-11-14 so the work can start right after approval.
+Status: **built** on branch `feature/dead-link-checker` (2026-11-14), to be merged after the first Edge Add-ons listing
+is approved (DECISIONS D8, D16). Code: `source/js/dead-links.js` (pure logic, tested), `source/js/page/dead-links-tool.js`
+(checking and display), `source/js/page/dead-links.js` (page start-up), `source/page/-dead-links.html.jss`.
 
 ## Goal
 
@@ -11,10 +12,13 @@ never call a page dead when it's only slow, blocking bots, or behind a login.
 
 ## Where it lives
 
-A fifth section on the **Tools** page, **Dead Links**, under Similar Favorites, built like the other tool sections:
-a description, a **Check Links** button, a results table (Title, Location, URL, Result, Select), a **Remove Favorites**
-button and a "Viewing N" line. No separate extension (discussed 2026-11-14): the Tools page is already "review and
-clean up your favorites", the store's single-purpose rule covers it, and a second listing would double the upkeep.
+Its own **Dead Links** page in the navigation, next to Tools (changed from a Tools section on 2026-11-14, D17). The
+Tools page runs its duplicate, similar and empty-folder scans every time it opens, which is already slow on very large
+collections; a separate page keeps the checker out of that, never starts anything on its own, and gives a long check a
+tab of its own. The page has a description, the skip-local option, a status line, a results table (Title, Location,
+URL, Result, Select), and **Check Links**, **Recheck Problems**, **Stop** and **Remove Selected** buttons. No separate
+extension (discussed 2026-11-14): cleaning up favorites is the extension's single purpose, and a second listing would
+double the upkeep.
 
 ## Permissions: ask only when used
 
@@ -22,7 +26,9 @@ clean up your favorites", the store's single-purpose rule covers it, and a secon
   `bookmarks` and `storage`, so installing or updating asks for nothing new, and store review sees no broad host access.
 - Clicking **Check Links** calls `browser.permissions.request({ origins: [...] })` (it must come from that click). If
   the user declines, show one line explaining why the access is needed and leave everything else working.
-- A **Revoke access** link next to the button calls `browser.permissions.remove`, for anyone who wants it gone after a check.
+- A **Revoke website access** link calls `browser.permissions.remove`, for anyone who wants it gone after a check.
+- The extension's own `browser` polyfill (`js/browser-polyfill.js`) only wraps the APIs it uses, so `permissions` and
+  `bookmarks.update` were added to it.
 
 ## Where the checking runs: the Tools page, not the service worker
 
@@ -46,11 +52,19 @@ tab stops the check. The results found so far are kept (see Results).
 | 2xx, or 3xx ending in 2xx | OK (not listed) | n/a |
 | Redirected to a different host or path | "Moved to …" (informational) | no |
 | 404, 410 | **Not found** | yes |
-| DNS failure / connection refused, twice, 10 s apart | **Unreachable** | yes |
+| DNS failure / connection refused, twice, 10 s apart, and again in the final pass | **Unreachable** | **no** |
 | 401, 403, 429, other 4xx | "Couldn't verify (HTTP n)" | no |
 | 5xx, timeout | "Server error / timed out" | no |
 
-Only "Not found" and "Unreachable" count as dead. Everything else is listed so the user can decide, but never pre-selected.
+Only "Not found" is pre-selected: a server answered that the page is gone. "Unreachable" counts as dead but is never
+pre-selected, because a dropped connection makes every site look unreachable (raised by the user, 2026-11-14).
+
+### Connection drops
+
+- Before each request, and whenever a request fails while `navigator.onLine` is false, the check pauses ("Paused: your
+  connection is offline") and resumes when the browser reports it's back.
+- Many networks drop without `navigator.onLine` changing, so after the main pass every address still marked
+  unreachable is checked once more ("Double-checking N unreachable addresses"). A short drop mid-run is corrected there.
 
 ## Being polite to websites
 
@@ -63,8 +77,9 @@ Only "Not found" and "Unreachable" count as dead. Everything else is listed so t
 - Saved in `browser.storage.local` (`tool_dead_links`: URL → result and time checked), so reopening Tools shows the
   last check with "checked 2 days ago".
 - **Recheck** re-runs only the non-OK ones; **Check Links** again does everything.
-- Removing uses the same path as the other tools: a `tool-dead-links-remove` port message with the selected IDs, and
-  the service worker removes them with `bookmark_remove`.
+- Removing and updating call `browser.bookmarks.remove` / `update` from the page directly; the service worker sees
+  the usual bookmark events (history log, re-sort) as with any other change. Results for favorites changed or removed
+  elsewhere are dropped (the page listens to `onRemoved` / `onChanged` and checks URLs on load).
 
 ## Privacy and store updates that ship with it
 
@@ -77,12 +92,19 @@ Only "Not found" and "Unreachable" count as dead. Everything else is listed so t
 ## Tests
 
 - Unit tests in `-background-test.js` style for the classifier (status code and error to result) and the per-host queue.
-- `test/run-tests.js` can't reach the internet in a reliable way, so the fetch layer gets a fake in tests; one manual
-  check against a few known URLs (a live page, a 404, a non-existent domain) before release.
+- Built: `dead_links_checkable`, `dead_links_is_local`, `dead_links_redirect_kind`, `dead_links_classify` and
+  `dead_links_queue` in `-background-test.js` (`js/dead-links.js` is included in the service worker for this).
+- The network part isn't in CI (it would depend on real websites): one manual run against a live page, a 404 and a
+  non-existent domain before release.
 
-## Open questions for the user
+## Decided with the user (2026-11-14)
 
-1. Should "Moved to …" offer to **update** the favorite's URL to the new address? (Useful, but changes favorites
-   rather than only removing them.)
-2. Should intranet and `localhost` URLs be skipped by default? (They are often only reachable at work or at home.)
-3. Is an "ignore this favorite" list worth it from the start, or only if people ask?
+1. **Moved links:** offer **Update address** only when there is a real new address: the redirect ends on a working
+   (2xx) page at a different URL. Not found / unreachable rows have no new address and only offer removal. A redirect
+   to the site's home page or a login page is shown as "Redirects to the site's home page" with no Update button,
+   since that usually means the page is gone, not moved.
+2. **Local and intranet addresses:** an option, **Skip local and intranet addresses**, on by default. It covers
+   `localhost`, `127.0.0.0/8`, `::1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, names ending in `.local`,
+   `.lan`, `.internal` or `.home.arpa`, and single-label hostnames (`http://wiki/`). Skipped favorites show as "not checked".
+3. **Ignore list, from the start:** an **Ignore** button per result row; ignored favorite IDs are kept in
+   `browser.storage.local` and left out of results, with a "Show N ignored" link to see and un-ignore them.

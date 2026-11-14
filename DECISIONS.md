@@ -146,3 +146,29 @@ The browser is Chrome for Testing, installed with `@puppeteer/browsers`, because
 Considered: CI without the browser tests (cheaper, but the only real tests are the in-browser ones); Playwright
 (a large dependency for one script; the DevTools protocol over Node's built-in WebSocket is enough); keeping releases
 manual with `gh release create` (works, but the zip then comes from whoever's machine, and steps get skipped).
+
+## D16. Features are built on a branch and merged through a pull request (2026-11-14)
+
+Each feature gets a short-lived branch (`feature/<name>`) off `main`, a pull request so CI tests every push, and is
+merged when tried out; releases stay tags on `main` (D15). `main` therefore stays releasable while a feature is half
+built: if the version in store review is rejected, or a small fix must ship, it goes out from `main` without the
+unfinished work. The user also wanted to learn the branch, commit, pull request, merge cycle.
+
+Considered: git-flow (permanent `main` + `develop`, plus feature, release and hotfix branches). It suits teams with
+release trains and several supported versions; here it would add a second long-lived branch to keep in sync and
+release branches the tag-driven workflow doesn't need. Committing straight to `main` (fine alone, but then unfinished
+work blocks every release). Note for merges: `deploy/` is generated, so a conflict there is fixed by running
+`node build.js` and committing the result, never by hand.
+
+## D17. Dead Links is its own page; only "not found" is pre-selected (2026-11-14)
+
+The user has more than 5,000 favorites and the Tools page is sometimes slow on them, because it rescans the whole tree
+for duplicates, similar and empty folders whenever it opens. The checker was moved from a Tools section to its own
+page so opening Tools never involves it and a check that takes minutes has a tab of its own.
+
+The user also pointed out that pre-selecting "unreachable" results would let a short Wi-Fi drop tick many good
+favorites for removal. Now only "not found" (a server answered that the page is gone) is pre-selected; the check pauses
+while the browser is offline, and every unreachable address is checked once more at the end.
+
+Considered: keeping it in Tools but lazy-loaded (still shares the page with the slow scans); pre-selecting
+unreachable after two failures (a drop longer than the retry gap defeats it).

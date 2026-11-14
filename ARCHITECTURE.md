@@ -15,8 +15,9 @@ source/                  edit here
   js/-background-test.js test suite, run with `await test()` from the service worker console
   js/shared.js           helpers used by both the service worker and the pages (the "shared" object): log, storage, theme
   js/browser-polyfill.js lets the code use the `browser.*` API in Chrome and Edge
-  js/page/*.js           one script per extension page
-  page/-<page>.html.jss  page templates (options, preferences, tools, about)
+  js/page/*.js           one script per extension page (dead-links.js starts the page, dead-links-tool.js is the checker)
+  js/dead-links.js       dead-link logic with no page or network access; also included in the service worker for tests
+  page/-<page>.html.jss  page templates (options, tools, dead-links, preferences, about)
   page/<theme>/<icon>/   tiny wrappers that render each page for every theme (light, dark) and icon colour
   page/include/          shared fragments: <head>, one-time messages, scroll navigation
   css/ fonts/ images/    static assets (icons in four colours, per-browser help images)
@@ -63,6 +64,11 @@ so they stay in step, and re-sorts. The toolbar icon focuses an open page or ope
 picks in Preferences (`icon_set`). Change the art in `art/`, run `node art/make-icons.js`, then `node build.js`.
 
 **Tools.** Duplicate, similar and empty-folder finders, and an optional bookmark history log kept in local storage.
+The service worker recomputes all three finders over the whole tree when Tools opens and after bookmark changes.
+
+**Dead Links.** A separate page (D17): nothing runs until the user clicks Check Links. The page itself does the checking
+(an MV3 service worker can be stopped mid-check), asks for optional host access first, and keeps results, the ignore
+list and the skip-local option in `browser.storage.local` under `dead_links`. Design: `docs/dead-link-checker.md`.
 
 **One-time messages.** `local.setting.show_message.<name>` flags (set at install or upgrade) show the matching
 `show-message-<name>` box from `page/include/-show-message.html.jss` until dismissed. The upgrade message is the fork
