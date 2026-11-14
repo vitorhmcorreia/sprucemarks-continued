@@ -27,6 +27,12 @@ const browser = { // will hold various functions
         // onMoved
         // onRemoved
         // remove
+        // update
+    },
+    'permissions': { // used by the Dead Links page (optional host access)
+        // contains
+        // remove
+        // request
     },
     'runtime': {
         // connect
@@ -70,6 +76,14 @@ browser.bookmarks.onImportEnded       = chrome.bookmarks.onImportEnded
 browser.bookmarks.onMoved             = chrome.bookmarks.onMoved
 browser.bookmarks.onRemoved           = chrome.bookmarks.onRemoved
 browser.bookmarks.remove              = chrome.bookmarks.remove
+browser.bookmarks.update              = chrome.bookmarks.update
+
+// chrome.permissions only exists when the manifest declares optional permissions
+if (chrome.permissions) {
+    browser.permissions.contains = chrome.permissions.contains
+    browser.permissions.remove   = chrome.permissions.remove
+    browser.permissions.request  = chrome.permissions.request
+} // if
 
 browser.runtime.connect     = chrome.runtime.connect
 browser.runtime.getManifest = chrome.runtime.getManifest

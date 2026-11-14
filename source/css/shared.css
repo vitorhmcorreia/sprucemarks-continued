@@ -709,6 +709,82 @@ label + .option-sort {
     padding: 2px 0;
 }
 
+#tool-dead-links .grid {
+    grid-template-columns: 1fr 0.8fr 1.3fr 1fr 70px;
+}
+
+#tool-dead-links .tool-control {
+    display: flex;
+    flex-direction: column-reverse; /* buttons on their own row, the small links underneath */
+}
+
+#tool-dead-links .tool-control div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 32px;
+}
+
+#tool-dead-links .tool-control p {
+    margin: 16px 0 0;
+}
+
+#tool-dead-links .tool-control a {
+    display: inline-block;
+    margin-right: 24px;
+    padding: 2px 0;
+    white-space: nowrap;
+}
+
+#tool-dead-links .dead-links-option {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    margin: 24px 0 0;
+}
+
+#tool-dead-links .dead-links-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 32px;
+    margin: 16px 0 0;
+}
+
+#tool-dead-links .dead-links-filters select {
+    background-position: right 10px center;
+    max-width: 360px;
+    min-width: 128px;
+    padding-right: 34px;
+    width: auto;
+}
+
+#tool-dead-links .dead-links-filter,
+#tool-dead-links .dead-links-site-filter {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+}
+
+#tool-dead-links .dead-links-status {
+    margin: 24px 0 0;
+}
+
+#tool-dead-links .new-url,
+#tool-dead-links .result-actions {
+    font-size: 14px;
+    margin-top: 6px;
+}
+
+#tool-dead-links .result-actions a + a {
+    margin-left: 12px;
+}
+
+.grid-col-span-5 {
+    grid-column: span 5;
+}
+
 .trouble-timing {
     display: block;
     font-size: 14px;

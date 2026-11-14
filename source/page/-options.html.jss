@@ -29,6 +29,11 @@
                     </a>
                 </li>
                 <li>
+                    <a class="page" href="/page/<js>write(theme)</js>/<js>write(icon)</js>/dead-links.html">
+                        <span>Dead Links</span>
+                    </a>
+                </li>
+                <li>
                     <a class="page" href="/page/<js>write(theme)</js>/<js>write(icon)</js>/preferences.html">
                         <span>Preferences</span>
                     </a>

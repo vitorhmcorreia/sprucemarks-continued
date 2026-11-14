@@ -147,6 +147,32 @@ Considered: CI without the browser tests (cheaper, but the only real tests are t
 (a large dependency for one script; the DevTools protocol over Node's built-in WebSocket is enough); keeping releases
 manual with `gh release create` (works, but the zip then comes from whoever's machine, and steps get skipped).
 
+## D16. Features are built on a branch and merged through a pull request (2026-11-14)
+
+Each feature gets a short-lived branch (`feature/<name>`) off `main`, a pull request so CI tests every push, and is
+merged when tried out; releases stay tags on `main` (D15). `main` therefore stays releasable while a feature is half
+built: if the version in store review is rejected, or a small fix must ship, it goes out from `main` without the
+unfinished work. The user also wanted to learn the branch, commit, pull request, merge cycle.
+
+Considered: git-flow (permanent `main` + `develop`, plus feature, release and hotfix branches). It suits teams with
+release trains and several supported versions; here it would add a second long-lived branch to keep in sync and
+release branches the tag-driven workflow doesn't need. Committing straight to `main` (fine alone, but then unfinished
+work blocks every release). Note for merges: `deploy/` is generated, so a conflict there is fixed by running
+`node build.js` and committing the result, never by hand.
+
+## D17. Dead Links is its own page; only "not found" is pre-selected (2026-11-14)
+
+The user has more than 5,000 favorites and the Tools page is sometimes slow on them, because it rescans the whole tree
+for duplicates, similar and empty folders whenever it opens. The checker was moved from a Tools section to its own
+page so opening Tools never involves it and a check that takes minutes has a tab of its own.
+
+The user also pointed out that pre-selecting "unreachable" results would let a short Wi-Fi drop tick many good
+favorites for removal. Now only "not found" (a server answered that the page is gone) is pre-selected; the check pauses
+while the browser is offline, and every unreachable address is checked once more at the end.
+
+Considered: keeping it in Tools but lazy-loaded (still shares the page with the slow scans); pre-selecting
+unreachable after two failures (a drop longer than the retry gap defeats it).
+
 ## D18. A timing log, kept locally and shown in Troubleshooting (2026-11-14)
 
 The user's 5,252 favorites sometimes make the Tools page struggle, not always. The original only had a verbose
@@ -194,10 +220,32 @@ any other hook, such as a pre-commit scan for personal data (caught when the fir
 The first appending installer (merged in #3) left new or empty hooks without the line, because `grep -v` exits 1
 when nothing is left and that skipped the copy; About kept showing the branch from the moment the installer ran. Fixed
 in #4, together with `test/hooks-install.sh`, which checks the hook files and that a switch and a merge really
-rewrite the file (it fails 7 of 13 checks on the old installer), and now runs in CI. In `deploy/` it
+rewrite the file (it fails 7 of 13 checks on the old installer), and now runs in CI. Bringing `main` into the
+Dead Links branch then showed that a merge finished by hand (after resolving conflicts) runs `post-commit`, not
+`post-merge`, so the installer also adds the line to `post-commit`, which keeps About current after any commit. In `deploy/` it
 is git-ignored; store zips and GitHub releases include it, so a store install shows the exact commit it came from.
 
 Considered: committing the commit ID in `deploy/` (a commit can't contain its own ID; writing the previous one would
 change `deploy/` on every build, break CI's deploy check and conflict on every merge); putting it in the manifest
 version (store versions must be numeric and increase); reading `.git` at runtime (an extension can only read files
 inside its own folder).
+
+## D21. Dead Links paces requests per site and backs off when a site says "slow down" (2026-11-14)
+
+The user asked whether a long check could make their traffic look like a bot. Across many different sites the checker
+was already gentle, but many favorites on one site meant up to 4 requests a second to it for minutes; for Google search
+result pages that can trigger the "unusual traffic" CAPTCHA for the user's whole connection. Now: 1.5 s between requests
+to the same site (from 0.25 s), at most 5 new requests a second overall, and a 429 or 503 pauses that site (its
+`Retry-After`, or 60 s doubling, capped at 10 minutes) and retries the address later, up to twice, without the
+follow-up GET it used to send straight away. Checked against a local server that rate-limits: one request per try,
+paused in between, the right results.
+
+Considered: a fixed long gap for every request (makes 5,000 favorites take hours for no benefit on sites with one
+favorite); skipping search-result URLs entirely (they can be dead too, and pacing solves it); a user-adjustable speed
+setting (one more option to understand; the defaults are safe).
+
+Confirmed on the user's collection the same day: rechecking with the new pacing, YouTube no longer appeared under
+"Couldn't verify", "Server error" or "Timed out". The recheck also showed YouTube "moves" that only added
+`?cbrd=1&ucbcb=1` (its no-consent-cookie markers, since checks send no cookies): a redirect to the same page that only
+adds parameters now counts as OK, a redirect to a cookie-consent page has its own result without "Update address",
+and the Update button re-applies the current rule so results saved earlier can't add that noise to a favorite.

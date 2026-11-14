@@ -67,8 +67,8 @@ Run this once in the clone so the About page can show which commit you're runnin
 sh .githooks/install
 ```
 
-It adds one line to the clone's own post-checkout, post-merge and post-rewrite hooks (keeping anything already there),
-so `deploy/build-info.json` (not in git) is rewritten after every `git switch`, `git pull` or rebase; `node build.js`
+It adds one line to the clone's own post-checkout, post-merge, post-rewrite and post-commit hooks (keeping anything already there),
+so `deploy/build-info.json` (not in git) is rewritten after every `git switch`, `git pull`, rebase or commit; `node build.js`
 writes it too. Reload the extension afterwards.
 
 ## Build

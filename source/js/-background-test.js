@@ -1762,3 +1762,239 @@ local.test.shared_url = function test_shared_url() {
         'Expected shared.url.extension to end with a "/" character.'
     )
 } // test_shared_url
+//------------
+// Dead Links
+//------------
+local.test.dead_links_checkable = function test_dead_links_checkable() {
+    /*
+    Only http and https favorites can be checked.
+    */
+
+    const cases = {
+        'https://example.com/'       : true,
+        'http://example.com/page'    : true,
+        'javascript:alert(1)'        : false,
+        'file:///home/user/notes.txt': false,
+        'edge://settings'            : false,
+        'not a url'                  : false
+    } // cases
+
+    for (const url in cases) {
+        expect(dead_links.checkable(url) === cases[url],
+            'Expected dead_links.checkable("' + url + '") to return ' + cases[url] + '.'
+        )
+    } // for
+} // test_dead_links_checkable
+
+local.test.dead_links_is_local = function test_dead_links_is_local() {
+    /*
+    Local and intranet addresses are recognised; public ones are not.
+    */
+
+    const cases = {
+        'http://localhost:8080/'        : true,
+        'http://127.0.0.1/'             : true,
+        'http://10.1.2.3/'              : true,
+        'http://172.16.0.1/'            : true,
+        'http://172.32.0.1/'            : false,
+        'http://192.168.1.26/'          : true,
+        'http://[::1]/'                 : true,
+        'http://[fd12:3456::1]/'        : true,
+        'http://nas.local/'             : true,
+        'http://router.lan/'            : true,
+        'http://printer.home.arpa/'     : true,
+        'http://wiki/'                  : true,
+        'https://example.com/'          : false,
+        'https://8.8.8.8/'              : false,
+        'https://en.wikipedia.org/wiki/': false
+    } // cases
+
+    for (const url in cases) {
+        expect(dead_links.is_local(url) === cases[url],
+            'Expected dead_links.is_local("' + url + '") to return ' + cases[url] + '.'
+        )
+    } // for
+} // test_dead_links_is_local
+
+local.test.dead_links_redirect_kind = function test_dead_links_redirect_kind() {
+    /*
+    Redirects are told apart: same page, real move, home page, sign-in page.
+    */
+
+    const cases = [
+        ['https://example.com/page', 'https://example.com/page/', 'none'],
+        ['https://example.com/page', 'https://example.com/page#top', 'none'],
+        ['http://example.com/page', 'https://example.com/page', 'moved'],
+        ['https://example.com/old', 'https://example.com/new', 'moved'],
+        ['https://example.com/old', 'https://example.com/', 'home'],
+        ['https://example.com/', 'https://www.example.com/', 'moved'],
+        ['https://example.com/private', 'https://example.com/login?next=/private', 'login'],
+        ['https://example.com/doc', 'https://accounts.example.com/signin', 'login'],
+        ['https://www.youtube.com/watch?v=abc', 'https://www.youtube.com/watch?v=abc&cbrd=1&ucbcb=1', 'none'],
+        ['https://example.com/page', 'https://example.com/page?utm_source=x&session=1', 'none'],
+        ['https://example.com/page?a=1', 'https://example.com/page?a=2', 'moved'],
+        ['https://example.com/page?a=1&b=2', 'https://example.com/page?b=2', 'moved'],
+        ['https://www.youtube.com/watch?v=abc', 'https://consent.youtube.com/m?continue=https%3A%2F%2Fwww.youtube.com', 'consent'],
+        ['https://news.example/story', 'https://news.example/cookie-consent/?return=/story', 'consent']
+    ] // cases
+
+    for (const [from, to, kind] of cases) {
+        expect(dead_links.redirect_kind(from, to) === kind,
+            'Expected dead_links.redirect_kind("' + from + '", "' + to + '") to return "' + kind + '", got "' + dead_links.redirect_kind(from, to) + '".'
+        )
+    } // for
+} // test_dead_links_redirect_kind
+
+local.test.dead_links_classify = function test_dead_links_classify() {
+    /*
+    Only "not found" and "unreachable" count as dead, only "not found" is pre-selected for removal (a Wi-Fi drop must
+    not tick good favorites), and a real move carries the new address.
+    */
+
+    const url = 'https://example.com/page'
+
+    const cases = [
+        [{ url: url, status: 200, final_url: url, error: '' }, 'ok', false, ''],
+        [{ url: url, status: 200, final_url: 'https://example.com/new-page', error: '' }, 'moved', false, 'https://example.com/new-page'],
+        [{ url: url, status: 200, final_url: 'https://example.com/', error: '' }, 'redirect_home', false, ''],
+        [{ url: url, status: 200, final_url: 'https://example.com/login', error: '' }, 'redirect_login', false, ''],
+        [{ url: url, status: 200, final_url: 'https://consent.example.com/?continue=x', error: '' }, 'redirect_consent', false, ''],
+        [{ url: url, status: 200, final_url: url + '?cbrd=1&ucbcb=1', error: '' }, 'ok', false, ''],
+        [{ url: url, status: 404, final_url: url, error: '' }, 'not_found', true, ''],
+        [{ url: url, status: 410, final_url: url, error: '' }, 'not_found', true, ''],
+        [{ url: url, status: 403, final_url: url, error: '' }, 'unverified', false, ''],
+        [{ url: url, status: 429, final_url: url, error: '' }, 'unverified', false, ''],
+        [{ url: url, status: 503, final_url: url, error: '' }, 'server_error', false, ''],
+        [{ url: url, status: 0, final_url: '', error: 'network' }, 'unreachable', true, ''],
+        [{ url: url, status: 0, final_url: '', error: 'timeout' }, 'timeout', false, '']
+    ] // cases
+
+    for (const [outcome, result, dead, new_url] of cases) {
+        const got = dead_links.classify(outcome)
+        const label = 'status ' + outcome.status + (outcome.error ? ' / ' + outcome.error : '') + ' -> ' + outcome.final_url
+
+        expect(got.result === result, 'Expected dead_links.classify(' + label + ').result to be "' + result + '", got "' + got.result + '".')
+        expect(got.dead === dead, 'Expected dead_links.classify(' + label + ').dead to be ' + dead + '.')
+        expect(got.preselect === (result === 'not_found'), 'Expected dead_links.classify(' + label + ').preselect to be ' + (result === 'not_found') + '.')
+        expect(got.new_url === new_url, 'Expected dead_links.classify(' + label + ').new_url to be "' + new_url + '".')
+        expect(typeof dead_links.describe(got.result, outcome.status) === 'string', 'Expected dead_links.describe() to return a string.')
+    } // for
+} // test_dead_links_classify
+
+local.test.dead_links_queue = async function test_dead_links_queue() {
+    /*
+    The queue runs everything, never more than "concurrency" at once, and never two requests to the same host at once.
+    */
+
+    const items = []
+
+    for (let index = 0; index < 12; index++) {
+        items.push({ 'url': 'https://host' + (index % 3) + '.example/' + index })
+    } // for
+
+    let running = 0
+    let max_running = 0
+    const host_running = {}
+    let host_overlap = false
+    const seen = []
+
+    const queue = dead_links.queue(items, async function(item) {
+        const host = dead_links.host(item.url)
+
+        running++
+        max_running = Math.max(max_running, running)
+
+        if (host_running[host]) {
+            host_overlap = true
+        } // if
+
+        host_running[host] = true
+        await delay(5)
+        host_running[host] = false
+        running--
+
+        seen.push(item.url)
+    }, { 'concurrency': 2, 'host_gap_ms': 1 })
+
+    await queue.done
+
+    expect(seen.length === items.length, 'Expected dead_links.queue() to run all ' + items.length + ' items, ran ' + seen.length + '.')
+    expect(max_running <= 2, 'Expected dead_links.queue() to run at most 2 at once, saw ' + max_running + '.')
+    expect(host_overlap === false, 'Expected dead_links.queue() to never run two requests to the same host at once.')
+} // test_dead_links_queue
+
+local.test.dead_links_backup_html = function test_dead_links_backup_html() {
+    /*
+    The backup file is a standard bookmarks file: every favorite back in its folders, under one dated folder, with
+    special characters escaped so a title or address can't break the file.
+    */
+
+    const html = dead_links.backup_html([
+        { 'title': 'A & <b>', 'url': 'https://a.example/?x=1&y="2"', 'location': 'Favorites bar/Recipes' },
+        { 'title': 'B', 'url': 'https://b.example/', 'location': 'Favorites bar' },
+        { 'title': '', 'url': 'https://c.example/', 'location': '' }
+    ], new Date('2026-11-14T15:30:00Z'))
+
+    expect(html.indexOf('<!DOCTYPE NETSCAPE-Bookmark-file-1>') === 0, 'Expected the backup to start with the bookmarks-file doctype.')
+    expect(html.includes('<H3 ADD_DATE="1794670200">Removed by Sprucemarks Continued 2026-11-14 15:30</H3>'), 'Expected one dated top folder.')
+    expect(html.includes('<A HREF="https://a.example/?x=1&amp;y=&quot;2&quot;" ADD_DATE="1794670200">A &amp; &lt;b&gt;</A>'), 'Expected the address and title to be escaped.')
+    expect(html.includes('>https://c.example/</A>'), 'Expected a favorite without a title to use its address.')
+    expect(html.indexOf('>Favorites bar</H3>') < html.indexOf('>Recipes</H3>'), 'Expected Recipes inside Favorites bar.')
+    expect((html.match(/<A HREF=/g) || []).length === 3, 'Expected all 3 favorites in the backup.')
+    expect((html.match(/<DL><p>/g) || []).length === (html.match(/<\/DL><p>/g) || []).length, 'Expected balanced folders.')
+} // test_dead_links_backup_html
+
+local.test.dead_links_queue_slow_down = async function test_dead_links_queue_slow_down() {
+    /*
+    A site that answers "slow down" is left alone and retried later, up to max_retries; the last try is marked final
+    so the result gets recorded. New requests never start closer together than min_start_gap_ms (D21).
+    */
+
+    const items = [{ 'url': 'https://busy.example/a' }, { 'url': 'https://calm.example/b' }, { 'url': 'https://calm2.example/c' }]
+    const tries = {}
+    const finals = {}
+    const starts = []
+
+    const queue = dead_links.queue(items, async function(item) {
+        starts.push(Date.now())
+        tries[item.url] = (tries[item.url] || 0) + 1
+        finals[item.url] = item.final
+
+        if (item.url.includes('busy')) {
+            return { 'retry_after': 20 } // always asks to slow down
+        } // if
+    }, { 'concurrency': 6, 'host_gap_ms': 1, 'min_start_gap_ms': 15, 'max_retries': 2 })
+
+    await queue.done
+
+    expect(tries['https://busy.example/a'] === 3, 'Expected a site that keeps saying "slow down" to be tried 1 + 2 times, got ' + tries['https://busy.example/a'] + '.')
+    expect(finals['https://busy.example/a'] === true, 'Expected the last try to be marked final.')
+    expect(tries['https://calm.example/b'] === 1 && finals['https://calm.example/b'] === false, 'Expected a normal site to be tried once, not final.')
+
+    let closest = Infinity
+
+    for (let index = 1; index < starts.length; index++) {
+        closest = Math.min(closest, starts[index] - starts[index - 1])
+    } // for
+
+    expect(closest >= 13, 'Expected requests to start at least ~15 ms apart, closest was ' + closest + ' ms.')
+} // test_dead_links_queue_slow_down
+
+local.test.dead_links_backoff = function test_dead_links_backoff() {
+    /*
+    Back-off honours Retry-After (seconds or a date), never goes below the doubled default or above the cap, and
+    only 429/503 count as "slow down".
+    */
+
+    const settings = { 'backoff_ms': 60000, 'max_backoff_ms': 600000 }
+    const now = Date.parse('2026-11-14T16:00:00Z')
+
+    expect(dead_links.backoff_ms('120', 0, now, settings) === 120000, 'Expected Retry-After: 120 to wait 120 s.')
+    expect(dead_links.backoff_ms('', 0, now, settings) === 60000, 'Expected no Retry-After to wait 60 s the first time.')
+    expect(dead_links.backoff_ms('', 2, now, settings) === 240000, 'Expected the wait to double per attempt.')
+    expect(dead_links.backoff_ms('5', 0, now, settings) === 60000, 'Expected a shorter Retry-After to still wait the default.')
+    expect(dead_links.backoff_ms('99999', 0, now, settings) === 600000, 'Expected the wait to be capped at 10 minutes.')
+    expect(dead_links.backoff_ms('Sat, 14 Nov 2026 16:05:00 GMT', 0, now, settings) === 300000, 'Expected a Retry-After date to be honoured.')
+    expect(dead_links.slow_down(429) && dead_links.slow_down(503) && !dead_links.slow_down(404) && !dead_links.slow_down(500), 'Expected only 429 and 503 to mean "slow down".')
+    expect(dead_links.describe('unverified', 429) === "Couldn't verify (rate limited, 429)", 'Expected 429 to be described as rate limited.')
+} // test_dead_links_backoff
