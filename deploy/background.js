@@ -934,10 +934,14 @@ const time_to_tick = shared.function.time_to_tick = function time_to_tick(event_
 
 const dead_links = {
     'setting': {
-        'concurrency'    : 6,     // requests in flight at once, overall
-        'host_gap_ms'    : 250,   // pause between two requests to the same host
-        'retry_delay_ms' : 10000, // wait before the second attempt on a network error
-        'timeout_ms'     : 15000  // give up on one request after this long
+        'concurrency'     : 6,      // requests in flight at once, overall
+        'host_gap_ms'     : 1500,   // pause between two requests to the same site (was 250 ms; see D21)
+        'min_start_gap_ms': 200,    // at most 5 new requests per second overall
+        'max_retries'     : 2,      // times a site that says "slow down" (429/503) is retried later before giving up
+        'backoff_ms'      : 60000,  // first wait after "slow down" when the site doesn't say how long (doubles each time)
+        'max_backoff_ms'  : 600000, // never wait longer than 10 minutes for one site
+        'retry_delay_ms'  : 10000,  // wait before the second attempt on a network error
+        'timeout_ms'      : 15000   // give up on one request after this long
     },
     'storage_key': 'dead_links' // browser.storage.local key holding results, ignored favorites and the skip-local option
 } // dead_links
@@ -1130,6 +1134,47 @@ dead_links.classify = function dead_links_classify(outcome) {
     return { 'result': 'ok', 'dead': false, 'preselect': false, 'new_url': '' }
 } // dead_links.classify
 
+dead_links.slow_down = function dead_links_slow_down(status) {
+    /*
+    True when a site is asking us to slow down: 429 Too Many Requests, or 503 Service Unavailable (also used for it).
+
+    @param   {Number}   status  HTTP status.
+    @return  {Boolean}
+    */
+
+    return status === 429 || status === 503
+} // dead_links.slow_down
+
+dead_links.backoff_ms = function dead_links_backoff_ms(retry_after, attempt, now, settings) {
+    /*
+    How long to leave a site alone after it asked us to slow down.
+
+    @param   {String}  retry_after  The Retry-After header: seconds ("120") or an HTTP date, or '' / null.
+    @param   {Number}  attempt      0 for the first "slow down", 1 for the second, ...
+    @param   {Number}  now          Date.now().
+    @param   {Object}  settings     { backoff_ms, max_backoff_ms }.
+    @return  {Number}               Milliseconds: what the site asked for, or backoff_ms doubled per attempt; never
+                                    less than the doubled default, never more than max_backoff_ms.
+    */
+
+    let asked = 0
+    const text = String(retry_after || '').trim()
+
+    if (/^\d+$/.test(text)) {
+        asked = Number(text) * 1000
+    } else if (text !== '') {
+        const date = Date.parse(text)
+
+        if (!isNaN(date)) {
+            asked = date - now
+        } // if
+    } // if
+
+    const doubled = settings.backoff_ms * Math.pow(2, attempt)
+
+    return Math.min(settings.max_backoff_ms, Math.max(asked, doubled))
+} // dead_links.backoff_ms
+
 dead_links.describe = function dead_links_describe(result, status) {
     /*
     Human text for a result.
@@ -1145,7 +1190,7 @@ dead_links.describe = function dead_links_describe(result, status) {
         case 'moved'         : return 'Moved to a new address'
         case 'redirect_home' : return "Redirects to the site's home page"
         case 'redirect_login': return 'Redirects to a sign-in page'
-        case 'unverified'    : return "Couldn't verify" + (status ? ' (' + status + ')' : '')
+        case 'unverified'    : return "Couldn't verify" + (status === 429 ? ' (rate limited, 429)' : (status ? ' (' + status + ')' : ''))
         case 'server_error'  : return 'Server error' + (status ? ' (' + status + ')' : '')
         case 'timeout'       : return 'Timed out'
         case 'skipped_local' : return 'Not checked: local address'
@@ -1155,25 +1200,35 @@ dead_links.describe = function dead_links_describe(result, status) {
 
 dead_links.queue = function dead_links_queue(items, worker, settings) {
     /*
-    Run worker(item) for every item, with at most settings.concurrency at once, one at a time per host, and
-    settings.host_gap_ms between two requests to the same host.
+    Run worker(item) for every item, politely (D21):
+    - at most settings.concurrency at once, and at most one new request every settings.min_start_gap_ms overall;
+    - one at a time per host, with settings.host_gap_ms between two requests to the same host;
+    - if worker returns { retry_after: ms } (the site asked us to slow down), that host is left alone for ms and the
+      item is tried again later, up to settings.max_retries times. item.attempts counts the tries so far, and
+      item.final is true on the last allowed try, so the worker records the result instead of asking again.
 
     @param   {Array}     items     Objects with a "url" property.
-    @param   {Function}  worker    async function(item), its return value is ignored.
-    @param   {Object}    settings  { concurrency, host_gap_ms }.
-    @return  {Object}              { done: Promise that resolves when everything finished, stop: function }
+    @param   {Function}  worker    async function(item), may return { retry_after: ms }.
+    @param   {Object}    settings  { concurrency, host_gap_ms, min_start_gap_ms, max_retries }.
+    @return  {Object}              { done: Promise resolved when everything finished, stop: function,
+                                     waiting_hosts: function returning how many hosts are in a slow-down pause }
     */
 
     const waiting = items.slice()
     const busy_hosts = {}  // host: true while a request to it is in flight
     const host_ready = {}  // host: time (ms) when the next request to it may start
+    const paused = {}      // host: true while it is in a slow-down pause
     let running = 0
     let stopped = false
+    let next_start = 0     // earliest time the next request (to any host) may start
+    let timer = null
 
     let finish
     const done = new Promise(function(resolve) { finish = resolve })
 
     const pump = function() {
+        clearTimeout(timer)
+
         if (stopped || (waiting.length === 0 && running === 0)) {
             if (running === 0) finish()
             return
@@ -1182,7 +1237,7 @@ dead_links.queue = function dead_links_queue(items, worker, settings) {
         const now = Date.now()
         let next_wake = Infinity
 
-        for (let index = 0; index < waiting.length && running < settings.concurrency; index++) {
+        for (let index = 0; index < waiting.length && running < (settings.concurrency || 1); index++) {
             const item = waiting[index]
             const host = dead_links.host(item.url)
 
@@ -1190,27 +1245,47 @@ dead_links.queue = function dead_links_queue(items, worker, settings) {
                 continue
             } // if
 
-            if ((host_ready[host] || 0) > now) {
+            if ((host_ready[host] || 0) > Date.now()) {
                 next_wake = Math.min(next_wake, host_ready[host])
                 continue
             } // if
 
+            if (next_start > Date.now()) {
+                next_wake = Math.min(next_wake, next_start)
+                break // overall pace: wait before starting anything else
+            } // if
+
+            paused[host] = false
             waiting.splice(index, 1)
             index--
 
+            item.attempts = item.attempts || 0
+            item.final = item.attempts >= (settings.max_retries || 0)
+
             running++
             busy_hosts[host] = true
+            next_start = Date.now() + (settings.min_start_gap_ms || 0)
 
-            Promise.resolve().then(function() { return worker(item) }).catch(function() {}).then(function() {
+            Promise.resolve().then(function() { return worker(item) }).catch(function() {}).then(function(answer) {
                 running--
                 busy_hosts[host] = false
-                host_ready[host] = Date.now() + settings.host_gap_ms
+
+                if (answer && answer.retry_after > 0 && !item.final && !stopped) {
+                    // the site asked us to slow down: leave it alone, try this item again later
+                    item.attempts += 1
+                    host_ready[host] = Date.now() + answer.retry_after
+                    paused[host] = true
+                    waiting.push(item)
+                } else {
+                    host_ready[host] = Math.max(host_ready[host] || 0, Date.now() + (settings.host_gap_ms || 0))
+                } // if
+
                 pump()
             })
         } // for
 
-        if (next_wake !== Infinity && running < settings.concurrency) {
-            setTimeout(pump, Math.max(0, next_wake - Date.now()))
+        if (next_wake !== Infinity && running < (settings.concurrency || 1)) {
+            timer = setTimeout(pump, Math.max(0, next_wake - Date.now()))
         } // if
     } // pump
 
@@ -1221,7 +1296,11 @@ dead_links.queue = function dead_links_queue(items, worker, settings) {
         'stop': function() {
             stopped = true
             waiting.length = 0
+            clearTimeout(timer)
             if (running === 0) finish()
+        },
+        'waiting_hosts': function() {
+            return Object.keys(paused).filter(host => paused[host]).length
         }
     }
 } // dead_links.queue
@@ -6487,3 +6566,58 @@ local.test.dead_links_backup_html = function test_dead_links_backup_html() {
     expect((html.match(/<A HREF=/g) || []).length === 3, 'Expected all 3 favorites in the backup.')
     expect((html.match(/<DL><p>/g) || []).length === (html.match(/<\/DL><p>/g) || []).length, 'Expected balanced folders.')
 } // test_dead_links_backup_html
+
+local.test.dead_links_queue_slow_down = async function test_dead_links_queue_slow_down() {
+    /*
+    A site that answers "slow down" is left alone and retried later, up to max_retries; the last try is marked final
+    so the result gets recorded. New requests never start closer together than min_start_gap_ms (D21).
+    */
+
+    const items = [{ 'url': 'https://busy.example/a' }, { 'url': 'https://calm.example/b' }, { 'url': 'https://calm2.example/c' }]
+    const tries = {}
+    const finals = {}
+    const starts = []
+
+    const queue = dead_links.queue(items, async function(item) {
+        starts.push(Date.now())
+        tries[item.url] = (tries[item.url] || 0) + 1
+        finals[item.url] = item.final
+
+        if (item.url.includes('busy')) {
+            return { 'retry_after': 20 } // always asks to slow down
+        } // if
+    }, { 'concurrency': 6, 'host_gap_ms': 1, 'min_start_gap_ms': 15, 'max_retries': 2 })
+
+    await queue.done
+
+    expect(tries['https://busy.example/a'] === 3, 'Expected a site that keeps saying "slow down" to be tried 1 + 2 times, got ' + tries['https://busy.example/a'] + '.')
+    expect(finals['https://busy.example/a'] === true, 'Expected the last try to be marked final.')
+    expect(tries['https://calm.example/b'] === 1 && finals['https://calm.example/b'] === false, 'Expected a normal site to be tried once, not final.')
+
+    let closest = Infinity
+
+    for (let index = 1; index < starts.length; index++) {
+        closest = Math.min(closest, starts[index] - starts[index - 1])
+    } // for
+
+    expect(closest >= 13, 'Expected requests to start at least ~15 ms apart, closest was ' + closest + ' ms.')
+} // test_dead_links_queue_slow_down
+
+local.test.dead_links_backoff = function test_dead_links_backoff() {
+    /*
+    Back-off honours Retry-After (seconds or a date), never goes below the doubled default or above the cap, and
+    only 429/503 count as "slow down".
+    */
+
+    const settings = { 'backoff_ms': 60000, 'max_backoff_ms': 600000 }
+    const now = Date.parse('2026-11-14T16:00:00Z')
+
+    expect(dead_links.backoff_ms('120', 0, now, settings) === 120000, 'Expected Retry-After: 120 to wait 120 s.')
+    expect(dead_links.backoff_ms('', 0, now, settings) === 60000, 'Expected no Retry-After to wait 60 s the first time.')
+    expect(dead_links.backoff_ms('', 2, now, settings) === 240000, 'Expected the wait to double per attempt.')
+    expect(dead_links.backoff_ms('5', 0, now, settings) === 60000, 'Expected a shorter Retry-After to still wait the default.')
+    expect(dead_links.backoff_ms('99999', 0, now, settings) === 600000, 'Expected the wait to be capped at 10 minutes.')
+    expect(dead_links.backoff_ms('Sat, 14 Nov 2026 16:05:00 GMT', 0, now, settings) === 300000, 'Expected a Retry-After date to be honoured.')
+    expect(dead_links.slow_down(429) && dead_links.slow_down(503) && !dead_links.slow_down(404) && !dead_links.slow_down(500), 'Expected only 429 and 503 to mean "slow down".')
+    expect(dead_links.describe('unverified', 429) === "Couldn't verify (rate limited, 429)", 'Expected 429 to be described as rate limited.')
+} // test_dead_links_backoff

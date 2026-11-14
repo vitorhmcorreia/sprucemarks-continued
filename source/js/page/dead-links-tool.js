@@ -137,7 +137,7 @@ dead_links_page.fetch_once = async function(url, method) {
             'signal'     : controller.signal
         })
 
-        const result = { 'status': response.status, 'final_url': response.url || url, 'error': '' }
+        const result = { 'status': response.status, 'final_url': response.url || url, 'error': '', 'retry_after': response.headers.get('Retry-After') || '' }
 
         if (method === 'GET') {
             controller.abort() // headers are enough
@@ -145,7 +145,7 @@ dead_links_page.fetch_once = async function(url, method) {
 
         return result
     } catch (error) {
-        return { 'status': 0, 'final_url': '', 'error': timed_out ? 'timeout' : 'network' }
+        return { 'status': 0, 'final_url': '', 'error': timed_out ? 'timeout' : 'network', 'retry_after': '' }
     } finally {
         clearTimeout(timer)
     } // try
@@ -162,7 +162,8 @@ dead_links_page.check_url = async function(url) {
     await dead_links_page.wait_online()
     let outcome = await dead_links_page.fetch_once(url, 'HEAD')
 
-    if (outcome.error === 'network' || outcome.status >= 400) {
+    // confirm failures with a GET, except "slow down" (429/503): asking again straight away would be rude (D21)
+    if (outcome.error === 'network' || (outcome.status >= 400 && !dead_links.slow_down(outcome.status))) {
         outcome = await dead_links_page.fetch_once(url, 'GET')
     } // if
 
@@ -180,6 +181,7 @@ dead_links_page.check_url = async function(url) {
 
     const classified = dead_links.classify({ 'url': url, 'status': outcome.status, 'final_url': outcome.final_url, 'error': outcome.error })
     classified.status = outcome.status
+    classified.retry_after = outcome.retry_after
 
     return classified
 } // dead_links_page.check_url
@@ -260,6 +262,11 @@ dead_links_page.run = async function(only_problems) {
     const check_one = async function(item) {
         const result = await dead_links_page.check_url(item.url)
 
+        if (dead_links.slow_down(result.status) && !item.final) {
+            // the site asked us to slow down (429/503): the queue leaves it alone for a while and tries again (D21)
+            return { 'retry_after': dead_links.backoff_ms(result.retry_after, item.attempts, Date.now(), dead_links.setting) }
+        } // if
+
         for (const bookmark of by_url[item.url]) {
             if (result.result === 'ok') {
                 delete state.results[bookmark.id]
@@ -282,7 +289,7 @@ dead_links_page.run = async function(only_problems) {
         } // for
 
         checked++
-        dead_links_page.progress(checked, urls.length)
+        dead_links_page.progress(checked, urls.length, dead_links_page.running && dead_links_page.running.waiting_hosts ? dead_links_page.running.waiting_hosts() : 0)
 
         if (checked % 25 === 0) {
             await dead_links_page.save() // keep partial results if the tab closes
@@ -527,8 +534,14 @@ dead_links_page.set_busy = function(busy) {
     } // if
 } // dead_links_page.set_busy
 
-dead_links_page.progress = function(checked, total) {
-    dead_links_page.element.status.textContent = 'Checking: ' + checked + ' of ' + total + ' addresses…'
+dead_links_page.progress = function(checked, total, waiting_hosts) {
+    let text = 'Checking: ' + checked + ' of ' + total + ' addresses…'
+
+    if (waiting_hosts > 0) {
+        text += ' ' + waiting_hosts + (waiting_hosts === 1 ? ' site' : ' sites') + ' asked us to slow down; trying them again in a few minutes.'
+    } // if
+
+    dead_links_page.element.status.textContent = text
 } // dead_links_page.progress
 
 dead_links_page.render_access = function(granted) {

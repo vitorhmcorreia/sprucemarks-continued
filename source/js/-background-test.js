@@ -1935,3 +1935,58 @@ local.test.dead_links_backup_html = function test_dead_links_backup_html() {
     expect((html.match(/<A HREF=/g) || []).length === 3, 'Expected all 3 favorites in the backup.')
     expect((html.match(/<DL><p>/g) || []).length === (html.match(/<\/DL><p>/g) || []).length, 'Expected balanced folders.')
 } // test_dead_links_backup_html
+
+local.test.dead_links_queue_slow_down = async function test_dead_links_queue_slow_down() {
+    /*
+    A site that answers "slow down" is left alone and retried later, up to max_retries; the last try is marked final
+    so the result gets recorded. New requests never start closer together than min_start_gap_ms (D21).
+    */
+
+    const items = [{ 'url': 'https://busy.example/a' }, { 'url': 'https://calm.example/b' }, { 'url': 'https://calm2.example/c' }]
+    const tries = {}
+    const finals = {}
+    const starts = []
+
+    const queue = dead_links.queue(items, async function(item) {
+        starts.push(Date.now())
+        tries[item.url] = (tries[item.url] || 0) + 1
+        finals[item.url] = item.final
+
+        if (item.url.includes('busy')) {
+            return { 'retry_after': 20 } // always asks to slow down
+        } // if
+    }, { 'concurrency': 6, 'host_gap_ms': 1, 'min_start_gap_ms': 15, 'max_retries': 2 })
+
+    await queue.done
+
+    expect(tries['https://busy.example/a'] === 3, 'Expected a site that keeps saying "slow down" to be tried 1 + 2 times, got ' + tries['https://busy.example/a'] + '.')
+    expect(finals['https://busy.example/a'] === true, 'Expected the last try to be marked final.')
+    expect(tries['https://calm.example/b'] === 1 && finals['https://calm.example/b'] === false, 'Expected a normal site to be tried once, not final.')
+
+    let closest = Infinity
+
+    for (let index = 1; index < starts.length; index++) {
+        closest = Math.min(closest, starts[index] - starts[index - 1])
+    } // for
+
+    expect(closest >= 13, 'Expected requests to start at least ~15 ms apart, closest was ' + closest + ' ms.')
+} // test_dead_links_queue_slow_down
+
+local.test.dead_links_backoff = function test_dead_links_backoff() {
+    /*
+    Back-off honours Retry-After (seconds or a date), never goes below the doubled default or above the cap, and
+    only 429/503 count as "slow down".
+    */
+
+    const settings = { 'backoff_ms': 60000, 'max_backoff_ms': 600000 }
+    const now = Date.parse('2026-11-14T16:00:00Z')
+
+    expect(dead_links.backoff_ms('120', 0, now, settings) === 120000, 'Expected Retry-After: 120 to wait 120 s.')
+    expect(dead_links.backoff_ms('', 0, now, settings) === 60000, 'Expected no Retry-After to wait 60 s the first time.')
+    expect(dead_links.backoff_ms('', 2, now, settings) === 240000, 'Expected the wait to double per attempt.')
+    expect(dead_links.backoff_ms('5', 0, now, settings) === 60000, 'Expected a shorter Retry-After to still wait the default.')
+    expect(dead_links.backoff_ms('99999', 0, now, settings) === 600000, 'Expected the wait to be capped at 10 minutes.')
+    expect(dead_links.backoff_ms('Sat, 14 Nov 2026 16:05:00 GMT', 0, now, settings) === 300000, 'Expected a Retry-After date to be honoured.')
+    expect(dead_links.slow_down(429) && dead_links.slow_down(503) && !dead_links.slow_down(404) && !dead_links.slow_down(500), 'Expected only 429 and 503 to mean "slow down".')
+    expect(dead_links.describe('unverified', 429) === "Couldn't verify (rate limited, 429)", 'Expected 429 to be described as rate limited.')
+} // test_dead_links_backoff

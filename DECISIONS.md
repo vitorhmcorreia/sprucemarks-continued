@@ -229,3 +229,17 @@ Considered: committing the commit ID in `deploy/` (a commit can't contain its ow
 change `deploy/` on every build, break CI's deploy check and conflict on every merge); putting it in the manifest
 version (store versions must be numeric and increase); reading `.git` at runtime (an extension can only read files
 inside its own folder).
+
+## D21. Dead Links paces requests per site and backs off when a site says "slow down" (2026-11-14)
+
+The user asked whether a long check could make their traffic look like a bot. Across many different sites the checker
+was already gentle, but many favorites on one site meant up to 4 requests a second to it for minutes; for Google search
+result pages that can trigger the "unusual traffic" CAPTCHA for the user's whole connection. Now: 1.5 s between requests
+to the same site (from 0.25 s), at most 5 new requests a second overall, and a 429 or 503 pauses that site (its
+`Retry-After`, or 60 s doubling, capped at 10 minutes) and retries the address later, up to twice, without the
+follow-up GET it used to send straight away. Checked against a local server that rate-limits: one request per try,
+paused in between, the right results.
+
+Considered: a fixed long gap for every request (makes 5,000 favorites take hours for no benefit on sites with one
+favorite); skipping search-result URLs entirely (they can be dead too, and pacing solves it); a user-adjustable speed
+setting (one more option to understand; the defaults are safe).

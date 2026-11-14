@@ -60,8 +60,9 @@ tab stops the check. The results found so far are kept (see Results).
 | Redirected to a different host or path | "Moved to …" (informational) | no |
 | 404, 410 | **Not found** | yes |
 | DNS failure / connection refused, twice, 10 s apart, and again in the final pass | **Unreachable** | **no** |
-| 401, 403, 429, other 4xx | "Couldn't verify (HTTP n)" | no |
-| 5xx, timeout | "Server error / timed out" | no |
+| 429 / 503 | site is paused and retried later (see below); after 3 tries "Couldn't verify (rate limited, 429)" / "Server error (503)" | no |
+| 401, 403, other 4xx | "Couldn't verify (HTTP n)" | no |
+| other 5xx, timeout | "Server error / timed out" | no |
 
 Only "Not found" is pre-selected: a server answered that the page is gone. "Unreachable" counts as dead but is never
 pre-selected, because a dropped connection makes every site look unreachable (raised by the user, 2026-11-14).
@@ -75,8 +76,17 @@ pre-selected, because a dropped connection makes every site look unreachable (ra
 
 ## Being polite to websites
 
-- At most 6 requests at a time overall, and 1 at a time per host, with 250 ms between requests to the same host.
-- One request per unique URL (duplicates are checked once).
+Tightened on 2026-11-14 (D21), after the user asked whether a long check could look like a bot:
+
+- At most 6 requests at a time, and at most 5 new requests per second overall.
+- One request at a time per site, with **1.5 s** between two requests to the same site (was 0.25 s). Sites with many
+  favorites (YouTube, saved search results) take longer; everything else is unaffected because the 6 slots stay busy.
+- **When a site says "slow down"** (429 Too Many Requests, or 503): no second request, the site is left alone for as
+  long as its `Retry-After` asks, or 60 s doubling each time (at most 10 minutes), and the address is tried again later,
+  up to 2 more times. Only then is it recorded, as "Couldn't verify (rate limited, 429)". The status line says how many
+  sites asked to slow down.
+- One request per unique URL (duplicates are checked once); HEAD first, GET only to confirm a failure, stopped as soon
+  as the headers arrive; no cookies.
 - Requests go only to the sites the user has bookmarked, directly from their browser. Nothing goes through a server of ours.
 
 ## Results
