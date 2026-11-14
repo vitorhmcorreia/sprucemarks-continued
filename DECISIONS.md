@@ -182,3 +182,18 @@ grouping of a known tree (`function_tool_similar_bookmarks_find_groups`).
 Considered: rescanning less often (longer throttle, or only when Tools is visible): still slow per scan, and the list
 would lag behind changes; caching results between scans and updating them per change: more state to keep correct for
 a scan that is now cheap enough to just rerun.
+
+## D20. The About page shows the git commit, from a git-ignored build-info.json (2026-11-14)
+
+The user tests branches on more than one machine and wanted to see which "version" is loaded; the manifest version
+doesn't change between commits. `build-info.json` (commit, branch or tag, commit date, uncommitted changes) is written
+next to the manifest by `node build.js`, and after every switch, pull or rebase by a line that `sh .githooks/install`
+adds to the clone's own post-checkout, post-merge and post-rewrite hooks, for machines without Node. The installer
+appends instead of setting `core.hooksPath`: that setting replaces the whole hooks folder and would silently switch off
+any other hook, such as a pre-commit scan for personal data (caught when the first version tried to use it). In `deploy/` it
+is git-ignored; store zips and GitHub releases include it, so a store install shows the exact commit it came from.
+
+Considered: committing the commit ID in `deploy/` (a commit can't contain its own ID; writing the previous one would
+change `deploy/` on every build, break CI's deploy check and conflict on every merge); putting it in the manifest
+version (store versions must be numeric and increase); reading `.git` at runtime (an extension can only read files
+inside its own folder).

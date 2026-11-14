@@ -60,6 +60,10 @@
                         <strong id="about-version">1.0</strong>
                         <span id="about-browser"></span>
                     </p>
+
+                    <p class="no-margin-bottom">
+                        Build: <span id="about-build">unknown</span>
+                    </p>
                 </div><!-- box-inner -->
             </div><!-- box -->
 
@@ -488,6 +492,11 @@
                     <p>
                         <strong>Sprucemarks Continued Version</strong><br>
                         <span id="trouble-version">1.0</span>
+                    </p>
+
+                    <p>
+                        <strong>Build</strong><br>
+                        <span id="trouble-build" class="word-break-all">Unknown</span>
                     </p>
 
                     <p>

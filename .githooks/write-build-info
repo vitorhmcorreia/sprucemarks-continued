@@ -1,0 +1,16 @@
+#!/bin/sh
+# Write deploy/build-info.json (git-ignored) with the commit the working copy is on, so the About page can show which
+# build is loaded. Called from the post-checkout, post-merge and post-rewrite hooks that .githooks/install sets up, for machines that load deploy/
+# without running "node build.js" (which writes the same file). DECISIONS D20.
+# Enable once per clone:  sh .githooks/install   (adds a line to this clone's hooks; does not use core.hooksPath)
+top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ -d "$top/deploy" ] || exit 0
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+commit=$(git rev-parse HEAD 2>/dev/null) || exit 0
+short=$(git rev-parse --short HEAD)
+branch=$(git rev-parse --abbrev-ref HEAD)
+date=$(git log -1 --format=%cI HEAD)
+if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then dirty=true; else dirty=false; fi
+printf '{\n    "commit": "%s",\n    "short": "%s",\n    "branch": "%s",\n    "date": "%s",\n    "dirty": %s,\n    "source": "git hook"\n}\n' \
+    "$commit" "$short" "$(esc "$branch")" "$date" "$dirty" > "$top/deploy/build-info.json"
+exit 0
