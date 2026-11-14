@@ -163,3 +163,22 @@ from the real collection rather than guessing.
 Considered: the existing verbose log (too noisy to read, and off for users); the browser's DevTools performance
 profiler (precise, but only if it is recording at the moment it happens, and "sometimes" means it usually isn't);
 sending timings anywhere (no: nothing leaves the browser, PRIVACY.md).
+
+## D19. "Find similar" groups addresses in one pass instead of comparing every pair (2026-11-14)
+
+The timing log (D18) on the user's real collection (4,347 bookmarks) showed the Tools scan at about 0.5 s, 90% of it
+in "find similar" (about 450 ms; 12–21 ms on evenly spread generated data). Tools reruns that scan after every favorite
+change, up to twice a second, so a burst of changes (sync, import, sorting) kept it busy most of the time. The cause:
+favorites are grouped by site + path (all YouTube videos are `www.youtube.com/watch`), and for every address the old code
+re-parsed every other address in its group and compared whole groups as strings, so cost grew with the square of the
+group size.
+
+"Similar" only depends on user name, password and port class (none/80/443 count as one), which makes it an equivalence:
+each address can go straight into a bucket keyed by those three, in one pass, with Sets and a direct lookup replacing
+the array searches. Checked against the old implementation on 25 generated collections with large groups plus edge cases:
+identical output (groups, numbering, order, fields); 144 ms to 10 ms per scan on this machine. A test now pins the
+grouping of a known tree (`function_tool_similar_bookmarks_find_groups`).
+
+Considered: rescanning less often (longer throttle, or only when Tools is visible): still slow per scan, and the list
+would lag behind changes; caching results between scans and updating them per change: more state to keep correct for
+a scan that is now cheap enough to just rerun.

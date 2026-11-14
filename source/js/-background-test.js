@@ -1044,6 +1044,39 @@ local.test.function_tool_similar_bookmarks_find = async function test_function_t
     } // try
 } // test_function_tool_similar_bookmarks_find
 
+local.test.function_tool_similar_bookmarks_find_groups = async function test_function_tool_similar_bookmarks_find_groups() {
+    /*
+    Make sure tool_similar_bookmarks_find() groups a known tree exactly as the original implementation did (2026-11-14,
+    when the all-pairs comparison was replaced by one-pass bucketing): same groups, numbers, order and fields. Covers
+    standard vs non-standard ports, user:pass, an exact duplicate, a different-case path, an invalid URL, an empty
+    folder and an ignored root (Trash).
+    */
+
+    const tree = { id: '0', title: '', children: [
+        { id: '1', title: 'Bar', children: [
+            { id: 'a', title: 'a', url: 'https://x.example/p?1' },
+            { id: 'b', title: 'b', url: 'https://x.example/p?2' },
+            { id: 'c', title: 'c', url: 'https://x.example:8080/p?3' },
+            { id: 'd', title: 'd', url: 'https://x.example:8080/p?4' },
+            { id: 'e', title: 'e', url: 'http://x.example:80/p?5' },
+            { id: 'f', title: 'f', url: 'https://u:p@x.example/p?6' },
+            { id: 'g', title: 'g', url: 'https://x.example/p?1' },
+            { id: 'h', title: 'h', url: 'https://x.example/P/' },
+            { id: 'i', title: 'i', url: 'not a url' },
+            { id: 'j', title: 'j', children: [] }
+        ] },
+        { id: '2', title: 'Trash', children: [{ id: 'k', title: 'k', url: 'https://x.example/p?9' }] }
+    ] } // tree
+
+    const expected = '{"x.example/p":{"1":[{"id":"a","location":"Bar","title":"a","type":"bookmark","url":"https://x.example/p?1"},{"id":"b","location":"Bar","title":"b","type":"bookmark","url":"https://x.example/p?2"},{"id":"e","location":"Bar","title":"e","type":"bookmark","url":"http://x.example:80/p?5"},{"id":"g","location":"Bar","title":"g","type":"bookmark","url":"https://x.example/p?1"},{"id":"h","location":"Bar","title":"h","type":"bookmark","url":"https://x.example/P/"}],"3":[{"id":"c","location":"Bar","title":"c","type":"bookmark","url":"https://x.example:8080/p?3"},{"id":"d","location":"Bar","title":"d","type":"bookmark","url":"https://x.example:8080/p?4"}]}}'
+
+    const got = JSON.stringify(await tool_similar_bookmarks_find(tree))
+
+    expect(got === expected,
+        'Expected tool_similar_bookmarks_find() to group the test tree as before, got ' + got
+    )
+} // test_function_tool_similar_bookmarks_find_groups
+
 local.test.function_tool_similar_bookmarks_remove = function test_function_tool_similar_bookmarks_remove() {
     /*
     Do not test tool_similar_bookmarks_remove() since it can remove actual bookmarks.

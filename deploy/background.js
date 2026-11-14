@@ -3679,6 +3679,14 @@ const tool_similar_bookmarks_find = local.function.tool_similar_bookmarks_find =
         // 'domain/path': ['url', 'url']
     } // domain_path_urls
 
+    const domain_path_seen = { // the same URLs as Sets, so "seen this exact URL already?" doesn't scan an array
+        // 'domain/path': Set
+    } // domain_path_seen
+
+    const similar_url_group = { // which group each similar URL was saved in, so note_similar_urls() doesn't search
+        // 'url': { domain_path: 'domain/path', group: 1 }
+    } // similar_url_group
+
     let result = {} // default return result
 
     const similar_bookmarks = {}
@@ -3687,7 +3695,7 @@ const tool_similar_bookmarks_find = local.function.tool_similar_bookmarks_find =
         // 'domain/path': ['url', 'url']
     } // similar_urls
 
-    let similar_urls_list = [] // simpler list of urls added to the similar_urls object in order to enable easier searching
+    let similar_urls_count = 0 // how many urls were saved in similar_urls
 
     //-----------
     // Functions
@@ -3715,14 +3723,16 @@ const tool_similar_bookmarks_find = local.function.tool_similar_bookmarks_find =
                 if (domain_path_urls[domain_path] === undefined) {
                     // create an empty array for this new domain path
                     domain_path_urls[domain_path] = []
+                    domain_path_seen[domain_path] = new Set()
                 } // if
 
-                if (domain_path_urls[domain_path].indexOf(bookmark.url) >= 0) {
+                if (domain_path_seen[domain_path].has(bookmark.url)) {
                     // exact URL match found
                     // ignore this URL since it will show up in the duplicate bookmarks tool
                 } else {
                     // unique url detected
                     domain_path_urls[domain_path].push(bookmark.url)
+                    domain_path_seen[domain_path].add(bookmark.url)
                 } // if
             } catch (error) {
                 // could not parse this URL so ignore it
@@ -3757,39 +3767,30 @@ const tool_similar_bookmarks_find = local.function.tool_similar_bookmarks_find =
         if (bookmark.children === undefined) {
             // regular bookmark, not a folder
 
-            if (similar_urls_list.indexOf(bookmark.url) >= 0) {
-                // a bookmark with a similar URL
+            const found = similar_url_group[bookmark.url]
 
-                const bookmark_url = new URL(bookmark.url)
+            if (found !== undefined) {
+                // a bookmark with a similar URL, and we already know its group
 
-                const domain_path = bookmark_url.hostname + (bookmark_url.pathname.toLowerCase().replace(/\/+$/, '')) // lowercase and then remove trailing slashes
+                const domain_path = found.domain_path
+                const group = found.group
 
-                for (const group in similar_urls[domain_path]) {
-                    const urls = similar_urls[domain_path][group]
+                if (similar_bookmarks[domain_path] === undefined) {
+                    similar_bookmarks[domain_path] = {}
+                } // if
 
-                    if (urls.indexOf(bookmark.url) >= 0) {
-                        // we found the correct group so make a note of this bookmarks info
+                if (similar_bookmarks[domain_path][group] === undefined) {
+                    similar_bookmarks[domain_path][group] = []
+                } // if
 
-                        if (similar_bookmarks[domain_path] === undefined) {
-                            similar_bookmarks[domain_path] = {}
-                        } // if
-
-                        if (similar_bookmarks[domain_path][group] === undefined) {
-                            similar_bookmarks[domain_path][group] = []
-                        } // if
-
-                        similar_bookmarks[domain_path][group].push({
-                            id      : bookmark.id,
-                            location: path,
-                            title   : bookmark.title,
-                            type    : 'bookmark',
-                            url     : bookmark.url,
-                            when    : bookmark.dateAdded
-                        })
-
-                        break // out of for loop
-                    } // if
-                } // for
+                similar_bookmarks[domain_path][group].push({
+                    id      : bookmark.id,
+                    location: path,
+                    title   : bookmark.title,
+                    type    : 'bookmark',
+                    url     : bookmark.url,
+                    when    : bookmark.dateAdded
+                })
             } // if
         } else if (bookmark.children.length === 0) {
             // bookmark folder with no children
@@ -3811,6 +3812,7 @@ const tool_similar_bookmarks_find = local.function.tool_similar_bookmarks_find =
 
     function similar_urls_in_array(bookmark_url, urls) {
         /*
+        The reference definition of "similar" (no longer called: the bucketing below applies the same rule in one pass).
         Return an array of similar URLs from an array, if any.
 
         @param   {String}  bookmark_url  URL to check.
@@ -3886,13 +3888,33 @@ const tool_similar_bookmarks_find = local.function.tool_similar_bookmarks_find =
     } // for
 
     // figure out if URLs are similar to each other and if yes, populate the "similar_urls" object with url groups under each domain path
+    //
+    // Two URLs under the same domain + path are similar when they have the same username, the same password, and either
+    // the same port or both a standard port ('', 80 or 443): see similar_urls_in_array(). That is an equivalence, so
+    // each URL can be put straight into a bucket keyed by those three things, in one pass. Comparing every URL with every
+    // other URL (as before 2026-11-14) gave the same groups but took seconds on collections with large groups such as
+    // hundreds of YouTube videos (all "www.youtube.com/watch"). Group numbers and order are kept exactly as before.
     for (const property in domain_path_urls) {
         const urls = domain_path_urls[property]
 
-        let group_count = 0 // will increment to keep unique groups of similar bookmarks separate
+        const bucket_of = {} // url: bucket key
+        const buckets = {}   // bucket key: urls in their original order
 
         for (const url of urls) {
-            const matches = similar_urls_in_array(url, urls)
+            const parsed = new URL(url)
+            const standard_port = (parsed.port === '' || parsed.port === '80' || parsed.port === '443')
+            const key = JSON.stringify([parsed.username, parsed.password, standard_port ? 'standard' : parsed.port])
+
+            bucket_of[url] = key
+            ;(buckets[key] = buckets[key] || []).push(url)
+        } // for
+
+        let group_count = 0 // will increment to keep unique groups of similar bookmarks separate
+        const saved = new Set() // bucket keys already saved as a group
+
+        for (const url of urls) {
+            const key = bucket_of[url]
+            const matches = buckets[key]
 
             if (matches.length >= 2) {
                 // similar urls detected
@@ -3902,25 +3924,22 @@ const tool_similar_bookmarks_find = local.function.tool_similar_bookmarks_find =
                     similar_urls[property] = {}
                 } // if
 
-                let save_matches = true // default
+                if (saved.has(key) === false) {
+                    saved.add(key)
 
-                for (const group in similar_urls[property]) {
-                    if (matches.toString() === similar_urls[property][group].toString()) {
-                        // we have already saved these matches
-                        save_matches = false
-                    } // if
-                } // for
-
-                if (save_matches === true) {
                     similar_urls[property][group_count] = matches
 
-                    similar_urls_list = similar_urls_list.concat(matches)
+                    for (const match of matches) {
+                        similar_url_group[match] = { 'domain_path': property, 'group': group_count }
+                    } // for
+
+                    similar_urls_count += matches.length
                 } // if
             } // if
         } // for
     } // for
 
-    if (similar_urls_list.length === 0) {
+    if (similar_urls_count === 0) {
         log('tool_similar_bookmarks_find -> no similar bookmarks')
         return similar_bookmarks // return an empty object
     } // if
@@ -5190,6 +5209,39 @@ local.test.function_tool_similar_bookmarks_find = async function test_function_t
         throw error
     } // try
 } // test_function_tool_similar_bookmarks_find
+
+local.test.function_tool_similar_bookmarks_find_groups = async function test_function_tool_similar_bookmarks_find_groups() {
+    /*
+    Make sure tool_similar_bookmarks_find() groups a known tree exactly as the original implementation did (2026-11-14,
+    when the all-pairs comparison was replaced by one-pass bucketing): same groups, numbers, order and fields. Covers
+    standard vs non-standard ports, user:pass, an exact duplicate, a different-case path, an invalid URL, an empty
+    folder and an ignored root (Trash).
+    */
+
+    const tree = { id: '0', title: '', children: [
+        { id: '1', title: 'Bar', children: [
+            { id: 'a', title: 'a', url: 'https://x.example/p?1' },
+            { id: 'b', title: 'b', url: 'https://x.example/p?2' },
+            { id: 'c', title: 'c', url: 'https://x.example:8080/p?3' },
+            { id: 'd', title: 'd', url: 'https://x.example:8080/p?4' },
+            { id: 'e', title: 'e', url: 'http://x.example:80/p?5' },
+            { id: 'f', title: 'f', url: 'https://u:p@x.example/p?6' },
+            { id: 'g', title: 'g', url: 'https://x.example/p?1' },
+            { id: 'h', title: 'h', url: 'https://x.example/P/' },
+            { id: 'i', title: 'i', url: 'not a url' },
+            { id: 'j', title: 'j', children: [] }
+        ] },
+        { id: '2', title: 'Trash', children: [{ id: 'k', title: 'k', url: 'https://x.example/p?9' }] }
+    ] } // tree
+
+    const expected = '{"x.example/p":{"1":[{"id":"a","location":"Bar","title":"a","type":"bookmark","url":"https://x.example/p?1"},{"id":"b","location":"Bar","title":"b","type":"bookmark","url":"https://x.example/p?2"},{"id":"e","location":"Bar","title":"e","type":"bookmark","url":"http://x.example:80/p?5"},{"id":"g","location":"Bar","title":"g","type":"bookmark","url":"https://x.example/p?1"},{"id":"h","location":"Bar","title":"h","type":"bookmark","url":"https://x.example/P/"}],"3":[{"id":"c","location":"Bar","title":"c","type":"bookmark","url":"https://x.example:8080/p?3"},{"id":"d","location":"Bar","title":"d","type":"bookmark","url":"https://x.example:8080/p?4"}]}}'
+
+    const got = JSON.stringify(await tool_similar_bookmarks_find(tree))
+
+    expect(got === expected,
+        'Expected tool_similar_bookmarks_find() to group the test tree as before, got ' + got
+    )
+} // test_function_tool_similar_bookmarks_find_groups
 
 local.test.function_tool_similar_bookmarks_remove = function test_function_tool_similar_bookmarks_remove() {
     /*
