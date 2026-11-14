@@ -1829,7 +1829,13 @@ local.test.dead_links_redirect_kind = function test_dead_links_redirect_kind() {
         ['https://example.com/old', 'https://example.com/', 'home'],
         ['https://example.com/', 'https://www.example.com/', 'moved'],
         ['https://example.com/private', 'https://example.com/login?next=/private', 'login'],
-        ['https://example.com/doc', 'https://accounts.example.com/signin', 'login']
+        ['https://example.com/doc', 'https://accounts.example.com/signin', 'login'],
+        ['https://www.youtube.com/watch?v=abc', 'https://www.youtube.com/watch?v=abc&cbrd=1&ucbcb=1', 'none'],
+        ['https://example.com/page', 'https://example.com/page?utm_source=x&session=1', 'none'],
+        ['https://example.com/page?a=1', 'https://example.com/page?a=2', 'moved'],
+        ['https://example.com/page?a=1&b=2', 'https://example.com/page?b=2', 'moved'],
+        ['https://www.youtube.com/watch?v=abc', 'https://consent.youtube.com/m?continue=https%3A%2F%2Fwww.youtube.com', 'consent'],
+        ['https://news.example/story', 'https://news.example/cookie-consent/?return=/story', 'consent']
     ] // cases
 
     for (const [from, to, kind] of cases) {
@@ -1852,6 +1858,8 @@ local.test.dead_links_classify = function test_dead_links_classify() {
         [{ url: url, status: 200, final_url: 'https://example.com/new-page', error: '' }, 'moved', false, 'https://example.com/new-page'],
         [{ url: url, status: 200, final_url: 'https://example.com/', error: '' }, 'redirect_home', false, ''],
         [{ url: url, status: 200, final_url: 'https://example.com/login', error: '' }, 'redirect_login', false, ''],
+        [{ url: url, status: 200, final_url: 'https://consent.example.com/?continue=x', error: '' }, 'redirect_consent', false, ''],
+        [{ url: url, status: 200, final_url: url + '?cbrd=1&ucbcb=1', error: '' }, 'ok', false, ''],
         [{ url: url, status: 404, final_url: url, error: '' }, 'not_found', true, ''],
         [{ url: url, status: 410, final_url: url, error: '' }, 'not_found', true, ''],
         [{ url: url, status: 403, final_url: url, error: '' }, 'unverified', false, ''],

@@ -60,6 +60,8 @@ tab stops the check. The results found so far are kept (see Results).
 |---|---|---|
 | 2xx, or 3xx ending in 2xx | OK (not listed) | n/a |
 | Redirected to a different host or path | "Moved to …" (informational) | no |
+| Same page with parameters only added (YouTube's `cbrd=1&ucbcb=1` without a consent cookie, tracking parameters) | OK (not moved) | n/a |
+| Redirected to a cookie-consent page (`consent.youtube.com`, …/cookie-consent/) | "Redirects to a cookie-consent page", no Update | no |
 | 404, 410 | **Not found** | yes |
 | DNS failure / connection refused, twice, 10 s apart, and again in the final pass | **Unreachable** | **no** |
 | 429 / 503 | site is paused and retried later (see below); after 3 tries "Couldn't verify (rate limited, 429)" / "Server error (503)" | no |

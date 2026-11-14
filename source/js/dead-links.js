@@ -122,7 +122,8 @@ dead_links.redirect_kind = function dead_links_redirect_kind(original_url, final
     @param   {String}  original_url  The bookmark's URL.
     @param   {String}  final_url     Where the redirects ended.
     @return  {String}                'none' (same page), 'home' (the site's home page, usually means the page is gone),
-                                     'login' (a sign-in page), or 'moved' (a real new address).
+                                     'login' (a sign-in page), 'consent' (a cookie-consent page), or 'moved' (a real new
+                                     address).
     */
 
     if (!final_url || dead_links.same_address(original_url, final_url)) {
@@ -142,6 +143,29 @@ dead_links.redirect_kind = function dead_links_redirect_kind(original_url, final
     const original_path = original.pathname.replace(/\/+$/, '')
     const final_path = final.pathname.replace(/\/+$/, '')
 
+    // Same page with parameters only added (YouTube adds "cbrd=1&ucbcb=1" when there is no consent cookie; other sites
+    // add tracking or session parameters): the page is fine, it hasn't moved. Updating the favorite would only pick up
+    // the noise. Checked on the user's collection, 2026-11-14.
+    if (original.origin === final.origin && original_path === final_path) {
+        let only_added = true
+
+        for (const [key, value] of original.searchParams) {
+            if (final.searchParams.getAll(key).indexOf(value) < 0) {
+                only_added = false
+                break
+            } // if
+        } // for
+
+        if (only_added) {
+            return 'none'
+        } // if
+    } // if
+
+    // a cookie-consent wall (consent.youtube.com, consent.google.com, ...): says nothing about where the page is
+    if (/^consent\./.test(final.hostname) || /(^|\/)(consent|cookie-?consent|gdpr)(\/|$)/i.test(final.pathname)) {
+        return 'consent'
+    } // if
+
     if (/(^|\/)(log-?in|sign-?in|signon|auth|sso|account\/login)(\/|$|\.)/i.test(final.pathname)) {
         return 'login'
     } // if
@@ -160,7 +184,7 @@ dead_links.classify = function dead_links_classify(outcome) {
 
     @param   {Object}  outcome  { url, status (Number, 0 if no response), final_url, error ('network', 'timeout' or '') }
     @return  {Object}           { result, dead, preselect, new_url }
-                                result: 'ok', 'moved', 'redirect_home', 'redirect_login', 'not_found', 'unreachable',
+                                result: 'ok', 'moved', 'redirect_home', 'redirect_login', 'redirect_consent', 'not_found', 'unreachable',
                                         'unverified' (401, 403, 429, other 4xx), 'server_error' (5xx), 'timeout'
                                 dead: true for 'not_found' and 'unreachable'
                                 preselect: true only for 'not_found', where a server answered that the page is gone.
@@ -203,6 +227,8 @@ dead_links.classify = function dead_links_classify(outcome) {
         return { 'result': 'redirect_home', 'dead': false, 'preselect': false, 'new_url': '' }
     } else if (kind === 'login') {
         return { 'result': 'redirect_login', 'dead': false, 'preselect': false, 'new_url': '' }
+    } else if (kind === 'consent') {
+        return { 'result': 'redirect_consent', 'dead': false, 'preselect': false, 'new_url': '' }
     } // if
 
     return { 'result': 'ok', 'dead': false, 'preselect': false, 'new_url': '' }
@@ -264,6 +290,7 @@ dead_links.describe = function dead_links_describe(result, status) {
         case 'moved'         : return 'Moved to a new address'
         case 'redirect_home' : return "Redirects to the site's home page"
         case 'redirect_login': return 'Redirects to a sign-in page'
+        case 'redirect_consent': return 'Redirects to a cookie-consent page'
         case 'unverified'    : return "Couldn't verify" + (status === 429 ? ' (rate limited, 429)' : (status ? ' (' + status + ')' : ''))
         case 'server_error'  : return 'Server error' + (status ? ' (' + status + ')' : '')
         case 'timeout'       : return 'Timed out'

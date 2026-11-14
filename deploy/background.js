@@ -1048,7 +1048,8 @@ dead_links.redirect_kind = function dead_links_redirect_kind(original_url, final
     @param   {String}  original_url  The bookmark's URL.
     @param   {String}  final_url     Where the redirects ended.
     @return  {String}                'none' (same page), 'home' (the site's home page, usually means the page is gone),
-                                     'login' (a sign-in page), or 'moved' (a real new address).
+                                     'login' (a sign-in page), 'consent' (a cookie-consent page), or 'moved' (a real new
+                                     address).
     */
 
     if (!final_url || dead_links.same_address(original_url, final_url)) {
@@ -1068,6 +1069,29 @@ dead_links.redirect_kind = function dead_links_redirect_kind(original_url, final
     const original_path = original.pathname.replace(/\/+$/, '')
     const final_path = final.pathname.replace(/\/+$/, '')
 
+    // Same page with parameters only added (YouTube adds "cbrd=1&ucbcb=1" when there is no consent cookie; other sites
+    // add tracking or session parameters): the page is fine, it hasn't moved. Updating the favorite would only pick up
+    // the noise. Checked on the user's collection, 2026-11-14.
+    if (original.origin === final.origin && original_path === final_path) {
+        let only_added = true
+
+        for (const [key, value] of original.searchParams) {
+            if (final.searchParams.getAll(key).indexOf(value) < 0) {
+                only_added = false
+                break
+            } // if
+        } // for
+
+        if (only_added) {
+            return 'none'
+        } // if
+    } // if
+
+    // a cookie-consent wall (consent.youtube.com, consent.google.com, ...): says nothing about where the page is
+    if (/^consent\./.test(final.hostname) || /(^|\/)(consent|cookie-?consent|gdpr)(\/|$)/i.test(final.pathname)) {
+        return 'consent'
+    } // if
+
     if (/(^|\/)(log-?in|sign-?in|signon|auth|sso|account\/login)(\/|$|\.)/i.test(final.pathname)) {
         return 'login'
     } // if
@@ -1086,7 +1110,7 @@ dead_links.classify = function dead_links_classify(outcome) {
 
     @param   {Object}  outcome  { url, status (Number, 0 if no response), final_url, error ('network', 'timeout' or '') }
     @return  {Object}           { result, dead, preselect, new_url }
-                                result: 'ok', 'moved', 'redirect_home', 'redirect_login', 'not_found', 'unreachable',
+                                result: 'ok', 'moved', 'redirect_home', 'redirect_login', 'redirect_consent', 'not_found', 'unreachable',
                                         'unverified' (401, 403, 429, other 4xx), 'server_error' (5xx), 'timeout'
                                 dead: true for 'not_found' and 'unreachable'
                                 preselect: true only for 'not_found', where a server answered that the page is gone.
@@ -1129,6 +1153,8 @@ dead_links.classify = function dead_links_classify(outcome) {
         return { 'result': 'redirect_home', 'dead': false, 'preselect': false, 'new_url': '' }
     } else if (kind === 'login') {
         return { 'result': 'redirect_login', 'dead': false, 'preselect': false, 'new_url': '' }
+    } else if (kind === 'consent') {
+        return { 'result': 'redirect_consent', 'dead': false, 'preselect': false, 'new_url': '' }
     } // if
 
     return { 'result': 'ok', 'dead': false, 'preselect': false, 'new_url': '' }
@@ -1190,6 +1216,7 @@ dead_links.describe = function dead_links_describe(result, status) {
         case 'moved'         : return 'Moved to a new address'
         case 'redirect_home' : return "Redirects to the site's home page"
         case 'redirect_login': return 'Redirects to a sign-in page'
+        case 'redirect_consent': return 'Redirects to a cookie-consent page'
         case 'unverified'    : return "Couldn't verify" + (status === 429 ? ' (rate limited, 429)' : (status ? ' (' + status + ')' : ''))
         case 'server_error'  : return 'Server error' + (status ? ' (' + status + ')' : '')
         case 'timeout'       : return 'Timed out'
@@ -6460,7 +6487,13 @@ local.test.dead_links_redirect_kind = function test_dead_links_redirect_kind() {
         ['https://example.com/old', 'https://example.com/', 'home'],
         ['https://example.com/', 'https://www.example.com/', 'moved'],
         ['https://example.com/private', 'https://example.com/login?next=/private', 'login'],
-        ['https://example.com/doc', 'https://accounts.example.com/signin', 'login']
+        ['https://example.com/doc', 'https://accounts.example.com/signin', 'login'],
+        ['https://www.youtube.com/watch?v=abc', 'https://www.youtube.com/watch?v=abc&cbrd=1&ucbcb=1', 'none'],
+        ['https://example.com/page', 'https://example.com/page?utm_source=x&session=1', 'none'],
+        ['https://example.com/page?a=1', 'https://example.com/page?a=2', 'moved'],
+        ['https://example.com/page?a=1&b=2', 'https://example.com/page?b=2', 'moved'],
+        ['https://www.youtube.com/watch?v=abc', 'https://consent.youtube.com/m?continue=https%3A%2F%2Fwww.youtube.com', 'consent'],
+        ['https://news.example/story', 'https://news.example/cookie-consent/?return=/story', 'consent']
     ] // cases
 
     for (const [from, to, kind] of cases) {
@@ -6483,6 +6516,8 @@ local.test.dead_links_classify = function test_dead_links_classify() {
         [{ url: url, status: 200, final_url: 'https://example.com/new-page', error: '' }, 'moved', false, 'https://example.com/new-page'],
         [{ url: url, status: 200, final_url: 'https://example.com/', error: '' }, 'redirect_home', false, ''],
         [{ url: url, status: 200, final_url: 'https://example.com/login', error: '' }, 'redirect_login', false, ''],
+        [{ url: url, status: 200, final_url: 'https://consent.example.com/?continue=x', error: '' }, 'redirect_consent', false, ''],
+        [{ url: url, status: 200, final_url: url + '?cbrd=1&ucbcb=1', error: '' }, 'ok', false, ''],
         [{ url: url, status: 404, final_url: url, error: '' }, 'not_found', true, ''],
         [{ url: url, status: 410, final_url: url, error: '' }, 'not_found', true, ''],
         [{ url: url, status: 403, final_url: url, error: '' }, 'unverified', false, ''],

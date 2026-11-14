@@ -448,7 +448,7 @@ dead_links_page.remove_selected = async function() {
 dead_links_page.update_address = async function(id) {
     const result = dead_links_page.state.results[id]
 
-    if (!result || !result.new_url) {
+    if (!result || !result.new_url || dead_links.redirect_kind(result.url, result.new_url) !== 'moved') {
         return
     } // if
 
@@ -603,7 +603,7 @@ dead_links_page.render_status = function() {
     dead_links_page.element.status.textContent = text + '.'
 } // dead_links_page.render_status
 
-dead_links_page.order = { 'not_found': 0, 'unreachable': 1, 'moved': 2, 'redirect_home': 3, 'redirect_login': 4, 'unverified': 5, 'server_error': 6, 'timeout': 7 }
+dead_links_page.order = { 'not_found': 0, 'unreachable': 1, 'moved': 2, 'redirect_home': 3, 'redirect_login': 4, 'redirect_consent': 5, 'unverified': 6, 'server_error': 7, 'timeout': 8 }
 
 dead_links_page.site = function(url) {
     // group "www.example.com" with "example.com"
@@ -740,7 +740,9 @@ dead_links_page.render = function() {
         const new_url = template.querySelector('.new-url')
         const update = template.querySelector('.update')
 
-        if (result.result === 'moved' && result.new_url) {
+        // re-ask the current rules, so results saved before a rule changed (like YouTube's "?cbrd=1&ucbcb=1") can't
+        // offer an update that would only add noise to the favorite
+        if (result.result === 'moved' && result.new_url && dead_links.redirect_kind(result.url, result.new_url) === 'moved') {
             new_url.querySelector('a').href = result.new_url
             new_url.querySelector('a').textContent = result.new_url
             update.dataset.id = id

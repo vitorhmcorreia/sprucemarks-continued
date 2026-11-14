@@ -243,3 +243,9 @@ paused in between, the right results.
 Considered: a fixed long gap for every request (makes 5,000 favorites take hours for no benefit on sites with one
 favorite); skipping search-result URLs entirely (they can be dead too, and pacing solves it); a user-adjustable speed
 setting (one more option to understand; the defaults are safe).
+
+Confirmed on the user's collection the same day: rechecking with the new pacing, YouTube no longer appeared under
+"Couldn't verify", "Server error" or "Timed out". The recheck also showed YouTube "moves" that only added
+`?cbrd=1&ucbcb=1` (its no-consent-cookie markers, since checks send no cookies): a redirect to the same page that only
+adds parameters now counts as OK, a redirect to a cookie-consent page has its own result without "Update address",
+and the Update button re-applies the current rule so results saved earlier can't add that noise to a favorite.
