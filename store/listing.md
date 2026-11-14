@@ -43,6 +43,9 @@ Used to save the user's options (which folders to sort and how), preferences (th
 
 **Optional host permissions (`http://*/*`, `https://*/*`), from 2026.11.14.2:**
 
+Partner Center has no field for this: it lists only the required permissions. The same explanation goes in the
+certification notes; this text is kept for reviewers' questions and for a future Chrome Web Store listing.
+
 ```
 Optional, never requested at install. Used only by the Dead Links page: when the user clicks "Check Links", the extension asks for this access, then sends a HEAD (or, to confirm a failure, a GET stopped after the headers) to each bookmarked address to see whether the page still exists, has moved, or is gone. Requests go directly from the browser to those sites, without cookies, at most 5 per second and 1.5 s apart per site, backing off when a site asks. Nothing is sent to the developer or anyone else. The user can revoke the access on that page at any time.
 ```
@@ -120,7 +123,8 @@ Update with no new permissions (still only "bookmarks" and "storage"). Changes: 
 
 ### 2026.11.14.2
 
-Submit only after 2026.11.14.1 is published: a new submission replaces one still in review and restarts its review.
+Submitted 2026-11-14, after 2026.11.14.1 was published (a new submission replaces one still in review and restarts its
+review).
 
 GitHub release notes (the annotated tag's message; the Release workflow publishes it):
 
@@ -137,7 +141,8 @@ Required permissions are unchanged (bookmarks, storage). Store users get this au
 **Install manually** (Chrome, Edge, Brave, Opera, Vivaldi): download the zip below, unzip it into a folder you'll keep, open your browser's extensions page, turn on Developer mode, and choose **Load unpacked**. Full steps in the [README](https://github.com/vitorhmcorreia/sprucemarks-continued#install).
 ```
 
-- Permissions: add the justification for the optional host permissions (above).
+- Permissions: nothing to add. Partner Center only lists the required permissions (bookmarks, storage) and has no
+  field for optional ones; the certification notes below explain them (the justification above is kept for reference).
 - Description: replace with the updated one above.
 - Screenshots: replace `3-duplicates.png` with `3-dead-links.png`, and replace `1-options.png`, `5-preferences-dark.png`
   and `6-about-dark.png` (the navigation now has a Dead Links tab; the About changelog is new). `2` and `4` are unchanged.

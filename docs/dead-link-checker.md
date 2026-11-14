@@ -121,8 +121,8 @@ Tightened on 2026-11-14 (D21), after the user asked whether a long check could l
 
 - `PRIVACY.md` has a "Dead Links (only when you use it)" section; the About page ("About This Fork") and the store
   description say the checks contact the bookmarked sites directly and nothing is sent anywhere else.
-- Edge listing: a justification for the optional host permission, and the certification notes explain it's requested
-  only when the user clicks Check Links.
+- Edge listing: the certification notes explain the optional host permission and that it's requested only when the
+  user clicks Check Links (Partner Center lists only required permissions, so it has no justification field for it).
 
 ## Tests
 
