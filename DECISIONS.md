@@ -42,7 +42,8 @@ the templates and editing the 24 generated pages by hand (error-prone, six copie
 Keeping `deploy/` in git means anyone can load the extension unpacked straight from a clone with no build step, as the
 original did, and `git diff deploy/` shows what a source change really produced. The test suite stays in that build so
 `await test()` works during development, while `--no-tests --zip` makes the store package smaller and free of test
-code. Zips go to the git-ignored `dist/`.
+code. Zips go to the git-ignored `dist/`, and a `--no-tests` build goes to `dist/package/`, never `deploy/` (the
+first store build overwrote `deploy/` without the tests until this was fixed, 2026-11-14).
 
 ## D6. The one-time upgrade message becomes the fork notice (2026-11-14)
 
@@ -101,3 +102,17 @@ the folder path.
 Considered: pointing users at "clone the repo" or GitHub's Download ZIP (needs git, or pulls the whole repo with
 sources and docs, and the folder to pick is less obvious); a self-hosted update URL for Chrome (Chrome only allows
 that for enterprise-managed or store installs, so it doesn't help).
+
+## D13. Store images are generated from the real extension and kept in the repo (2026-11-14)
+
+`store/make-store-assets.js` loads the built `deploy/` into a throwaway headless Edge profile seeded with made-up
+favorites of public websites, drives it over the DevTools protocol, and writes six 1280×800 screenshots plus the
+300×300 logo and both promotional tiles. The listing text, search terms and certification notes sit next to them in
+`store/listing.md`. Each release can refresh the screenshots in one command, they always show the current UI, and the
+same files will serve a Chrome listing later. Category: Productivity.
+
+Considered: hand-made screenshots of the user's own browser (shows real favorites and isn't repeatable); generating
+the copy with Partner Center's "Generate with AI" (it can't know about the fork wording D1 requires). Gotchas found
+while building it: a background tab can't be captured (the extension's first-install tab takes focus, so the script
+brings its tab to the front), `Page.captureScreenshot`'s `clip` uses page coordinates and breaks scrolled shots, and
+pages must be waited on until `#content` is visible rather than for a fixed time.

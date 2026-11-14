@@ -13,8 +13,9 @@ Rules, matching the original feri-config.js:
 
 Usage: node build.js                 build into deploy/
        node build.js --out <dir>     build into another folder
-       node build.js --zip           also zip deploy/ into dist/sprucemarks-continued-<version>.zip (store upload)
-       node build.js --no-tests      leave the background test suite out (for store releases)
+       node build.js --zip           also zip the output into dist/sprucemarks-continued-<version>.zip (store upload)
+       node build.js --no-tests      leave the background test suite out (for store releases); builds into
+                                     dist/package/ so deploy/ keeps the full build
 */
 
 const fs = require('fs')
@@ -24,8 +25,10 @@ const { execFileSync } = require('child_process')
 const argv = process.argv.slice(2)
 const ROOT = __dirname
 const SOURCE = path.join(ROOT, 'source')
-const OUT = argv.includes('--out') ? path.resolve(argv[argv.indexOf('--out') + 1]) : path.join(ROOT, 'deploy')
 const NO_TESTS = argv.includes('--no-tests')
+// deploy/ is always the full build (D5): a build without tests goes to dist/package/ unless --out says otherwise
+const OUT = argv.includes('--out') ? path.resolve(argv[argv.indexOf('--out') + 1])
+    : path.join(ROOT, NO_TESTS ? 'dist/package' : 'deploy')
 const IGNORE = new Set(['.DS_Store', 'Thumbs.db'])
 
 function render(file, args) {
