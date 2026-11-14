@@ -20,7 +20,8 @@ the original author.
 
 ### From the Microsoft Edge Add-ons store
 
-In review (submitted November 14, 2026). The link will appear here once it is published. Store installs update automatically.
+**[Get Sprucemarks Continued on Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/sprucemarks-continued/kbnolfoleaklmdmejgffhmbodflkojeh)** (published November 14, 2026). Store installs update
+automatically.
 
 ### Manually, in Chrome, Edge, Brave, Opera or Vivaldi
 

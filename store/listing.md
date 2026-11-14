@@ -1,5 +1,7 @@
 # Edge Add-ons listing: Sprucemarks Continued
 
+Live since 2026-11-14: https://microsoftedge.microsoft.com/addons/detail/sprucemarks-continued/kbnolfoleaklmdmejgffhmbodflkojeh (extension ID `kbnolfoleaklmdmejgffhmbodflkojeh`).
+
 Copy these into Partner Center (Microsoft Edge → your extension). Images are in this folder; regenerate them with
 `node build.js && node store/make-store-assets.js`. Limits are from Microsoft's "Publish an extension" page
 (checked 2026-11-14) and from what Partner Center actually enforced at the first submission.
