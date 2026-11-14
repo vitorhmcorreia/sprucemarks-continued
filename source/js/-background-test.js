@@ -1914,3 +1914,24 @@ local.test.dead_links_queue = async function test_dead_links_queue() {
     expect(max_running <= 2, 'Expected dead_links.queue() to run at most 2 at once, saw ' + max_running + '.')
     expect(host_overlap === false, 'Expected dead_links.queue() to never run two requests to the same host at once.')
 } // test_dead_links_queue
+
+local.test.dead_links_backup_html = function test_dead_links_backup_html() {
+    /*
+    The backup file is a standard bookmarks file: every favorite back in its folders, under one dated folder, with
+    special characters escaped so a title or address can't break the file.
+    */
+
+    const html = dead_links.backup_html([
+        { 'title': 'A & <b>', 'url': 'https://a.example/?x=1&y="2"', 'location': 'Favorites bar/Recipes' },
+        { 'title': 'B', 'url': 'https://b.example/', 'location': 'Favorites bar' },
+        { 'title': '', 'url': 'https://c.example/', 'location': '' }
+    ], new Date('2026-11-14T15:30:00Z'))
+
+    expect(html.indexOf('<!DOCTYPE NETSCAPE-Bookmark-file-1>') === 0, 'Expected the backup to start with the bookmarks-file doctype.')
+    expect(html.includes('<H3 ADD_DATE="1794670200">Removed by Sprucemarks Continued 2026-11-14 15:30</H3>'), 'Expected one dated top folder.')
+    expect(html.includes('<A HREF="https://a.example/?x=1&amp;y=&quot;2&quot;" ADD_DATE="1794670200">A &amp; &lt;b&gt;</A>'), 'Expected the address and title to be escaped.')
+    expect(html.includes('>https://c.example/</A>'), 'Expected a favorite without a title to use its address.')
+    expect(html.indexOf('>Favorites bar</H3>') < html.indexOf('>Recipes</H3>'), 'Expected Recipes inside Favorites bar.')
+    expect((html.match(/<A HREF=/g) || []).length === 3, 'Expected all 3 favorites in the backup.')
+    expect((html.match(/<DL><p>/g) || []).length === (html.match(/<\/DL><p>/g) || []).length, 'Expected balanced folders.')
+} // test_dead_links_backup_html

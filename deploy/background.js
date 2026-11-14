@@ -1226,6 +1226,75 @@ dead_links.queue = function dead_links_queue(items, worker, settings) {
     }
 } // dead_links.queue
 
+dead_links.backup_html = function dead_links_backup_html(items, when) {
+    /*
+    A standard bookmarks file (the "Netscape" HTML format every browser can import) holding the favorites that are
+    about to be removed, in their original folders, under one folder named after the date. Restore with the browser's
+    "import favorites / bookmarks from HTML file".
+
+    @param   {Object}  items  Array of { title, url, location } (location like "Favorites bar/Recipes").
+    @param   {Date}    when   When the backup is made.
+    @return  {String}         The file's contents.
+    */
+
+    const escape = function(text) {
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    } // escape
+
+    const seconds = Math.floor(when.getTime() / 1000)
+    const stamp = when.toISOString().slice(0, 16).replace('T', ' ')
+
+    // build a folder tree from the locations
+    const root = { 'folders': {}, 'order': [], 'links': [] }
+
+    for (const item of items) {
+        let folder = root
+
+        for (const name of String(item.location || '').split('/').filter(part => part !== '')) {
+            if (folder.folders[name] === undefined) {
+                folder.folders[name] = { 'folders': {}, 'order': [], 'links': [] }
+                folder.order.push(name)
+            } // if
+
+            folder = folder.folders[name]
+        } // for
+
+        folder.links.push(item)
+    } // for
+
+    const lines = []
+
+    const write = function(folder, indent) {
+        for (const item of folder.links) {
+            lines.push(indent + '<DT><A HREF="' + escape(item.url) + '" ADD_DATE="' + seconds + '">' + escape(item.title || item.url) + '</A>')
+        } // for
+
+        for (const name of folder.order) {
+            lines.push(indent + '<DT><H3 ADD_DATE="' + seconds + '">' + escape(name) + '</H3>')
+            lines.push(indent + '<DL><p>')
+            write(folder.folders[name], indent + '    ')
+            lines.push(indent + '</DL><p>')
+        } // for
+    } // write
+
+    write(root, '            ')
+
+    return [
+        '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
+        '<!-- Favorites removed by Sprucemarks Continued on ' + stamp + ' UTC. Import this file to restore them. -->',
+        '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+        '<TITLE>Bookmarks</TITLE>',
+        '<H1>Bookmarks</H1>',
+        '<DL><p>',
+        '    <DT><H3 ADD_DATE="' + seconds + '">Removed by Sprucemarks Continued ' + escape(stamp) + '</H3>',
+        '    <DL><p>',
+        ...lines.map(line => line.replace(/^ {4}/, '')),
+        '    </DL><p>',
+        '</DL><p>',
+        ''
+    ].join('\n')
+} // dead_links.backup_html
+
 
 'use strict' // not technically needed since this file will be included in another file that will specify 'use strict' first
 
@@ -6397,3 +6466,24 @@ local.test.dead_links_queue = async function test_dead_links_queue() {
     expect(max_running <= 2, 'Expected dead_links.queue() to run at most 2 at once, saw ' + max_running + '.')
     expect(host_overlap === false, 'Expected dead_links.queue() to never run two requests to the same host at once.')
 } // test_dead_links_queue
+
+local.test.dead_links_backup_html = function test_dead_links_backup_html() {
+    /*
+    The backup file is a standard bookmarks file: every favorite back in its folders, under one dated folder, with
+    special characters escaped so a title or address can't break the file.
+    */
+
+    const html = dead_links.backup_html([
+        { 'title': 'A & <b>', 'url': 'https://a.example/?x=1&y="2"', 'location': 'Favorites bar/Recipes' },
+        { 'title': 'B', 'url': 'https://b.example/', 'location': 'Favorites bar' },
+        { 'title': '', 'url': 'https://c.example/', 'location': '' }
+    ], new Date('2026-11-14T15:30:00Z'))
+
+    expect(html.indexOf('<!DOCTYPE NETSCAPE-Bookmark-file-1>') === 0, 'Expected the backup to start with the bookmarks-file doctype.')
+    expect(html.includes('<H3 ADD_DATE="1794670200">Removed by Sprucemarks Continued 2026-11-14 15:30</H3>'), 'Expected one dated top folder.')
+    expect(html.includes('<A HREF="https://a.example/?x=1&amp;y=&quot;2&quot;" ADD_DATE="1794670200">A &amp; &lt;b&gt;</A>'), 'Expected the address and title to be escaped.')
+    expect(html.includes('>https://c.example/</A>'), 'Expected a favorite without a title to use its address.')
+    expect(html.indexOf('>Favorites bar</H3>') < html.indexOf('>Recipes</H3>'), 'Expected Recipes inside Favorites bar.')
+    expect((html.match(/<A HREF=/g) || []).length === 3, 'Expected all 3 favorites in the backup.')
+    expect((html.match(/<DL><p>/g) || []).length === (html.match(/<\/DL><p>/g) || []).length, 'Expected balanced folders.')
+} // test_dead_links_backup_html

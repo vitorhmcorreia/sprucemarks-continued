@@ -743,6 +743,13 @@ label + .option-sort {
     margin: 24px 0 0;
 }
 
+#tool-dead-links .dead-links-filter {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    margin: 16px 0 0;
+}
+
 #tool-dead-links .dead-links-status {
     margin: 24px 0 0;
 }

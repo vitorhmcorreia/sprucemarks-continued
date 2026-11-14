@@ -22,6 +22,7 @@ const dead_links_page = {
     },
     'selected'    : {},    // bookmark id: true, for the Remove button
     'show_ignored': false,
+    'filter'      : 'all', // result shown in the table ('all' or a result like 'not_found'), see render_filter()
     'running'     : null,  // queue while a check runs
     'element'     : {}
 } // dead_links_page
@@ -250,6 +251,7 @@ dead_links_page.run = async function(only_problems) {
     if (!only_problems) {
         state.results = {}
         dead_links_page.selected = {}
+        dead_links_page.filter = 'all'
     } // if
 
     dead_links_page.set_busy(true)
@@ -374,8 +376,45 @@ dead_links_page.stop_check = function() {
     } // if
 } // dead_links_page.stop_check
 
+dead_links_page.save_backup = function(ids) {
+    /*
+    Download a bookmarks file with the favorites about to be removed (see dead_links.backup_html). The page builds the
+    file itself, so no "downloads" permission is needed. Returns the file name.
+    */
+
+    const now = new Date()
+    const items = ids.map(id => dead_links_page.state.results[id])
+    const html = dead_links.backup_html(items, now)
+    const name = 'sprucemarks-removed-' + now.toISOString().slice(0, 16).replace('T', '-').replace(':', '') + '.html'
+
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([html], { 'type': 'text/html' }))
+    link.download = name
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(function() { URL.revokeObjectURL(link.href) }, 60000)
+
+    return name
+} // dead_links_page.save_backup
+
 dead_links_page.remove_selected = async function() {
     const ids = Object.keys(dead_links_page.selected).filter(id => dead_links_page.selected[id] && dead_links_page.state.results[id])
+
+    if (ids.length === 0) {
+        return
+    } // if
+
+    // a backup file first, so removing is never a one-way trip
+    let backup = ''
+
+    try {
+        backup = dead_links_page.save_backup(ids)
+    } catch (error) {
+        log('dead_links_page.remove_selected -> backup failed', error)
+        dead_links_page.element.status.textContent = "Couldn't save the backup file, so nothing was removed: " + (error && error.message ? error.message : error)
+        return
+    } // try
 
     for (const id of ids) {
         try {
@@ -390,6 +429,10 @@ dead_links_page.remove_selected = async function() {
 
     await dead_links_page.save()
     dead_links_page.render()
+
+    const word = dead_links_page.word(ids.length !== 1)
+    dead_links_page.element.status.textContent = 'Removed ' + ids.length + ' ' + word + '. A backup was saved to your downloads as ' +
+        backup + ': to restore, import it as a bookmarks HTML file in your browser settings.'
 } // dead_links_page.remove_selected
 
 dead_links_page.update_address = async function(id) {
@@ -451,6 +494,7 @@ dead_links_page.start_over = async function() {
     state.last_run = null
     dead_links_page.selected = {}
     dead_links_page.show_ignored = false
+    dead_links_page.filter = 'all'
 
     await dead_links_page.save()
     dead_links_page.render()
@@ -530,16 +574,72 @@ dead_links_page.render_status = function() {
     dead_links_page.element.status.textContent = text + '.'
 } // dead_links_page.render_status
 
+dead_links_page.order = { 'not_found': 0, 'unreachable': 1, 'moved': 2, 'redirect_home': 3, 'redirect_login': 4, 'unverified': 5, 'server_error': 6, 'timeout': 7 }
+
+dead_links_page.render_filter = function(ids) {
+    /*
+    Fill the "Show" list with the results that occur among ids, with counts. Rows hidden by the filter are unticked,
+    so Remove Selected only ever removes favorites the user can see (the Tools page does the same).
+
+    @param   {Object}  ids  Bookmark ids in the current view (results or ignored).
+    @return  {Object}       The ids that pass the filter.
+    */
+
+    const e = dead_links_page.element
+    const state = dead_links_page.state
+    const counts = {}
+
+    for (const id of ids) {
+        counts[state.results[id].result] = (counts[state.results[id].result] || 0) + 1
+    } // for
+
+    const present = Object.keys(counts).sort((a, b) => dead_links_page.order[a] - dead_links_page.order[b])
+
+    if (dead_links_page.filter !== 'all' && counts[dead_links_page.filter] === undefined) {
+        dead_links_page.filter = 'all' // that result is gone (removed, updated, ignored)
+    } // if
+
+    e.filter.textContent = ''
+
+    const add = function(value, text) {
+        const option = document.createElement('option')
+        option.value = value
+        option.textContent = text
+        option.selected = (value === dead_links_page.filter)
+        e.filter.appendChild(option)
+    } // add
+
+    add('all', 'All results (' + ids.length + ')')
+
+    for (const result of present) {
+        add(result, dead_links.describe(result).replace(/ \(.*\)$/, '').replace(/: .*$/, '') + ' (' + counts[result] + ')')
+    } // for
+
+    e.filter_label.classList.toggle('hidden', present.length < 2) // nothing to choose between
+
+    const shown = ids.filter(id => dead_links_page.filter === 'all' || state.results[id].result === dead_links_page.filter)
+
+    for (const id of ids) {
+        if (shown.indexOf(id) < 0) {
+            delete dead_links_page.selected[id]
+        } // if
+    } // for
+
+    return shown
+} // dead_links_page.render_filter
+
 dead_links_page.render = function() {
     const e = dead_links_page.element
     const state = dead_links_page.state
     const rows = e.grid_rows
-    const order = { 'not_found': 0, 'unreachable': 1, 'moved': 2, 'redirect_home': 3, 'redirect_login': 4, 'unverified': 5, 'server_error': 6, 'timeout': 7 }
+    const order = dead_links_page.order
 
     rows.textContent = ''
 
-    const ids = Object.keys(state.results)
+    const in_view = Object.keys(state.results)
         .filter(id => (state.ignored.indexOf(id) >= 0) === dead_links_page.show_ignored)
+
+    const ids = dead_links_page.render_filter(in_view)
         .sort(function(a, b) {
             const ra = state.results[a]
             const rb = state.results[b]
@@ -621,6 +721,8 @@ dead_links_page.start = async function() {
     e.button_remove = root.querySelector('#button-remove-dead-links')
     e.button_start_over = root.querySelector('#button-start-over')
     e.show_ignored = root.querySelector('.dead-links-show-ignored')
+    e.filter = root.querySelector('#dead-links-filter')
+    e.filter_label = root.querySelector('.dead-links-filter')
     e.revoke = root.querySelector('.dead-links-revoke')
     e.template_row = document.getElementById('template-dead-links-grid-row')
     e.template_no_results = document.getElementById('template-dead-links-no-results')
@@ -650,6 +752,12 @@ dead_links_page.start = async function() {
     e.show_ignored.addEventListener('click', function(event) {
         event.preventDefault()
         dead_links_page.show_ignored = !dead_links_page.show_ignored
+        dead_links_page.filter = 'all'
+        dead_links_page.render()
+    })
+
+    e.filter.addEventListener('change', function() {
+        dead_links_page.filter = this.value
         dead_links_page.render()
     })
 

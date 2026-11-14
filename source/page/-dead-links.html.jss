@@ -76,6 +76,11 @@
 
                             <p class="dead-links-status">Not checked yet.</p>
 
+                            <label class="dead-links-filter hidden">
+                                <span>Show</span>
+                                <select id="dead-links-filter"></select>
+                            </label>
+
                             <div class="grid-area">
                                 <div class="grid">
                                     <div class="grid-header">

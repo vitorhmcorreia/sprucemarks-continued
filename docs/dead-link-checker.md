@@ -18,7 +18,9 @@ collections; a separate page keeps the checker out of that, never starts anythin
 tab of its own. The page has a description, the skip-local option, a status line, a results table (Title, Location,
 URL, Result, Select), and **Check Links**, **Recheck Problems**, **Stop**, **Remove Selected** and **Start Over**
 buttons. Start Over (asked for by the user, 2026-11-14) forgets results, ticks, the last-run line and the ignore list,
-after a confirmation that says how much; favorites are never touched. No separate
+after a confirmation that says how much; favorites are never touched. A **Show** list filters the table by result
+("Not found (12)", …; only results that occur, with counts); rows filtered out are unticked, so Remove Selected only
+removes favorites the user can see (same rule as the Tools page). No separate
 extension (discussed 2026-11-14): cleaning up favorites is the extension's single purpose, and a second listing would
 double the upkeep.
 
@@ -82,6 +84,12 @@ pre-selected, because a dropped connection makes every site look unreachable (ra
 - Saved in `browser.storage.local` (`tool_dead_links`: URL → result and time checked), so reopening Tools shows the
   last check with "checked 2 days ago".
 - **Recheck** re-runs only the non-OK ones; **Check Links** again does everything.
+- **Backup before removing** (asked for by the user, 2026-11-14): Remove Selected first downloads
+  `sprucemarks-removed-<date>-<time>.html`, a standard bookmarks file (`dead_links.backup_html`) with the favorites about
+  to go, in their original folders under one dated folder. Any browser restores it with "import bookmarks from HTML
+  file". The page builds the file itself, so no `downloads` permission is needed; if building it fails, nothing is
+  removed. Chosen over moving favorites to a "Removed" folder, which would be synced, sorted and scanned by Tools until
+  emptied.
 - Removing and updating call `browser.bookmarks.remove` / `update` from the page directly; the service worker sees
   the usual bookmark events (history log, re-sort) as with any other change. Results for favorites changed or removed
   elsewhere are dropped (the page listens to `onRemoved` / `onChanged` and checks URLs on load).
