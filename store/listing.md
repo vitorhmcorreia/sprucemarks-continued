@@ -19,7 +19,7 @@ Copy these into Partner Center (Microsoft Edge → your extension). Images are i
 
 - Category: **Productivity**
 - Privacy policy URL: `https://github.com/vitorhmcorreia/sprucemarks-continued/blob/main/PRIVACY.md` (from
-  2026.11.15.0 it also describes the Dead Links checks; data collection answers stay "none": the checks contact the
+  2026.11.14.2 it also describes the Dead Links checks; data collection answers stay "none": the checks contact the
   bookmarked sites themselves and nothing is collected)
   (strictly only required when an extension collects personal data; this one collects none, but a link costs nothing
   and answers the question up front)
@@ -41,7 +41,7 @@ Sprucemarks Continued sorts the user's favorites. It needs the bookmarks permiss
 Used to save the user's options (which folders to sort and how), preferences (theme, toolbar icon color) and the optional favorites history shown on the Tools page, in local extension storage on the user's device. Nothing is synced or sent anywhere.
 ```
 
-**Optional host permissions (`http://*/*`, `https://*/*`), from 2026.11.15.0:**
+**Optional host permissions (`http://*/*`, `https://*/*`), from 2026.11.14.2:**
 
 ```
 Optional, never requested at install. Used only by the Dead Links page: when the user clicks "Check Links", the extension asks for this access, then sends a HEAD (or, to confirm a failure, a GET stopped after the headers) to each bookmarked address to see whether the page still exists, has moved, or is gone. Requests go directly from the browser to those sites, without cookies, at most 5 per second and 1.5 s apart per site, backing off when a site asks. Nothing is sent to the developer or anyone else. The user can revoke the access on that page at any time.
@@ -54,7 +54,7 @@ Optional, never requested at install. Used only by the Dead Links page: when the
 > Automatically sort bookmarks by title, date, or URL. A community fork that keeps Sprucemarks alive.
 
 **Description** (934 characters; Partner Center allows 250 to 1,000, although Microsoft's docs say 10,000; updated
-for 2026.11.15.0 with Dead Links):
+for 2026.11.14.2 with Dead Links):
 
 ```
 Sprucemarks Continued keeps your favorites in order, automatically.
@@ -81,7 +81,7 @@ An unofficial community fork of Sprucemarks by Kai Nightmode, archived in 2026 a
 
 1. `screenshots/1-options.png`: options, automatic sorting on
 2. `screenshots/2-sort-options.png`: a sort order per folder and its sub folders
-3. `screenshots/3-dead-links.png`: Dead Links results (from 2026.11.15.0; before that `3-duplicates.png`)
+3. `screenshots/3-dead-links.png`: Dead Links results (from 2026.11.14.2; before that `3-duplicates.png`)
 4. `screenshots/4-similar.png`: similar favorites tool
 5. `screenshots/5-preferences-dark.png`: preferences, dark theme
 6. `screenshots/6-about-dark.png`: about this fork
@@ -118,14 +118,14 @@ submission except `1-options.png` and `5-preferences-dark.png`, which now show t
 Update with no new permissions (still only "bookmarks" and "storage"). Changes: the Tools page finds similar favorites about 15 times faster on large collections; the About page shows a timing summary and which build is running; a green page logo matching the icon; developer console logging is off; links to this listing. No network requests, no data collected. Source and change history: https://github.com/vitorhmcorreia/sprucemarks-continued
 ```
 
-### 2026.11.15.0
+### 2026.11.14.2
 
 Submit only after 2026.11.14.1 is published: a new submission replaces one still in review and restarts its review.
 
 GitHub release notes (the annotated tag's message; the Release workflow publishes it):
 
 ```
-**Sprucemarks Continued 2026.11.15.0**: Dead Links.
+**Sprucemarks Continued 2026.11.14.2**: Dead Links.
 
 - **New Dead Links page**: find favorites whose page no longer exists, has moved, or could not be verified, then update, ignore, or remove them.
 - **Asks first, checks politely**: nothing is checked until you click Check Links, and website access is requested only then (optional permission, revocable on the page). Checks go straight from your browser to each site, without cookies, at most 5 requests a second and 1.5 s apart per site, backing off when a site asks.
