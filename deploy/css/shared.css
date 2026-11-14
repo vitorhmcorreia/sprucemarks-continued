@@ -761,6 +761,12 @@ label + .option-sort {
     grid-column: span 5;
 }
 
+.trouble-timing {
+    display: block;
+    font-size: 14px;
+    white-space: pre-wrap;
+}
+
 #tool-empty-folders .grid {
     grid-template-columns: 1fr 1.55fr 70px;
 }

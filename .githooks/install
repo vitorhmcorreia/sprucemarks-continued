@@ -1,0 +1,39 @@
+#!/bin/sh
+# Make this clone write deploy/build-info.json after every git switch, pull/merge and rebase (D20).
+# Adds one line to the clone's own post-checkout, post-merge and post-rewrite hooks, keeping anything already there.
+# It does not set core.hooksPath (that would switch off every other hook, such as a pre-commit check) and does not
+# touch pre-commit. Safe to run more than once.  Usage: sh .githooks/install
+top=$(git rev-parse --show-toplevel) || exit 1
+hooks=$(git rev-parse --git-path hooks)
+case "$hooks" in /*) ;; *) hooks="$top/$hooks" ;; esac
+mkdir -p "$hooks"
+# skips quietly on branches that don't have the script
+line='f="$(git rev-parse --show-toplevel)/.githooks/write-build-info"; [ -f "$f" ] && sh "$f"; true # sprucemarks build-info (D20)'
+for name in post-checkout post-merge post-rewrite; do
+    file="$hooks/$name"
+    if [ ! -f "$file" ]; then
+        printf '#!/bin/sh\n' > "$file"
+    fi
+    if grep -q 'sprucemarks build-info' "$file"; then
+        echo "updated $file"
+    else
+        echo "added to $file"
+    fi
+    # our line goes right after the first line (#!...), so an "exit" later in an existing hook can't skip it;
+    # an older copy of our line is dropped, everything else is kept in order
+    # (grep -v exits 1 when nothing is left, as with a new hook: "|| true" keeps that from skipping the copy)
+    tmp="$file.sprucemarks-tmp"
+    {
+        head -n 1 "$file"
+        printf '%s\n' "$line"
+        tail -n +2 "$file" | grep -v 'sprucemarks build-info' || true
+    } > "$tmp"
+    cat "$tmp" > "$file"
+    rm -f "$tmp" "$file.tmp" # $file.tmp: left behind by the first version of this script
+    if ! grep -q 'sprucemarks build-info' "$file"; then
+        echo "could not add the line to $file" >&2
+        exit 1
+    fi
+    chmod +x "$file"
+done
+sh "$top/.githooks/write-build-info" && echo "wrote deploy/build-info.json"

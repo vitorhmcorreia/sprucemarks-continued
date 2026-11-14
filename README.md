@@ -60,6 +60,15 @@ replace the `background` object in `manifest.json` with:
 ### From a clone (developers)
 
 Clone the repo and load the `deploy/` folder unpacked, as in the manual steps above. It's always built and committed.
+Run this once in the clone so the About page can show which commit you're running, even without Node.js:
+
+```
+sh .githooks/install
+```
+
+It adds one line to the clone's own post-checkout, post-merge and post-rewrite hooks (keeping anything already there),
+so `deploy/build-info.json` (not in git) is rewritten after every `git switch`, `git pull` or rebase; `node build.js`
+writes it too. Reload the extension afterwards.
 
 ## Build
 
@@ -83,6 +92,9 @@ How the code fits together: [ARCHITECTURE.md](ARCHITECTURE.md). Why the fork is 
 Use the `log` setting inside `source/js/shared.js` to enable or disable console logs for various events and operations
 (release builds turn it off automatically).
 
+When something feels slow, open **About → Troubleshooting → Timing**: it lists how long recent Tools scans, drawing and
+sorting took (slowest first). **Copy Information** includes it, for a bug report.
+
 ## Test
 
 Run the test suite in a headless browser (Edge or Chromium; set `BROWSER=` to pick one):
@@ -91,7 +103,7 @@ Run the test suite in a headless browser (Edge or Chromium; set `BROWSER=` to pi
 node build.js && node test/run-tests.js
 ```
 
-Or, with the extension loaded unpacked, run `await test()` in its service worker console (not available in
+`sh test/hooks-install.sh` tests the git hook installer. Or, with the extension loaded unpacked, run `await test()` in its service worker console (not available in
 `--no-tests` builds). CI runs the suite on every push.
 
 ## Privacy

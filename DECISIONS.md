@@ -172,3 +172,58 @@ while the browser is offline, and every unreachable address is checked once more
 
 Considered: keeping it in Tools but lazy-loaded (still shares the page with the slow scans); pre-selecting
 unreachable after two failures (a drop longer than the retry gap defeats it).
+
+## D18. A timing log, kept locally and shown in Troubleshooting (2026-11-14)
+
+The user's 5,252 favorites sometimes make the Tools page struggle, not always. The original only had a verbose
+development log (every event printed to the console, off in store builds, D14), which says nothing about where time
+goes. So the extension now records how long each step takes: reading the tree and each Tools finder (on open and on
+every refresh, with how many favorite changes came in since the last refresh), drawing each Tools section, and full
+sorts. The newest 200 timings are saved in local storage (they survive the service worker stopping) and summarized on
+the About page, per step: runs, average, slowest, last, with Copy Information including it for bug reports.
+
+Measured first with 5,252 generated favorites (`test/browser.js` takes any collection): Tools opens in about 0.25 s,
+a refresh takes about 0.1 s, a full sort up to 2.6 s. That did not reproduce the slowness, so the fix waits for timings
+from the real collection rather than guessing.
+
+Considered: the existing verbose log (too noisy to read, and off for users); the browser's DevTools performance
+profiler (precise, but only if it is recording at the moment it happens, and "sometimes" means it usually isn't);
+sending timings anywhere (no: nothing leaves the browser, PRIVACY.md).
+
+## D19. "Find similar" groups addresses in one pass instead of comparing every pair (2026-11-14)
+
+The timing log (D18) on the user's real collection (4,347 bookmarks) showed the Tools scan at about 0.5 s, 90% of it
+in "find similar" (about 450 ms; 12–21 ms on evenly spread generated data). Tools reruns that scan after every favorite
+change, up to twice a second, so a burst of changes (sync, import, sorting) kept it busy most of the time. The cause:
+favorites are grouped by site + path (all YouTube videos are `www.youtube.com/watch`), and for every address the old code
+re-parsed every other address in its group and compared whole groups as strings, so cost grew with the square of the
+group size.
+
+"Similar" only depends on user name, password and port class (none/80/443 count as one), which makes it an equivalence:
+each address can go straight into a bucket keyed by those three, in one pass, with Sets and a direct lookup replacing
+the array searches. Checked against the old implementation on 25 generated collections with large groups plus edge cases:
+identical output (groups, numbering, order, fields); 144 ms to 10 ms per scan on this machine. A test now pins the
+grouping of a known tree (`function_tool_similar_bookmarks_find_groups`).
+
+Considered: rescanning less often (longer throttle, or only when Tools is visible): still slow per scan, and the list
+would lag behind changes; caching results between scans and updating them per change: more state to keep correct for
+a scan that is now cheap enough to just rerun.
+
+## D20. The About page shows the git commit, from a git-ignored build-info.json (2026-11-14)
+
+The user tests branches on more than one machine and wanted to see which "version" is loaded; the manifest version
+doesn't change between commits. `build-info.json` (commit, branch or tag, commit date, uncommitted changes) is written
+next to the manifest by `node build.js`, and after every switch, pull or rebase by a line that `sh .githooks/install`
+adds to the clone's own post-checkout, post-merge and post-rewrite hooks, for machines without Node. The installer
+appends instead of setting `core.hooksPath`: that setting replaces the whole hooks folder and would silently switch off
+any other hook, such as a pre-commit scan for personal data (caught when the first version tried to use it).
+The first appending installer (merged in #3) left new or empty hooks without the line, because `grep -v` exits 1
+when nothing is left and that skipped the copy; About kept showing the branch from the moment the installer ran. Fixed
+in #4, together with `test/hooks-install.sh`, which checks the hook files and that a switch and a merge really
+rewrite the file (it fails 7 of 13 checks on the old installer), and now runs in CI. In `deploy/` it
+is git-ignored; store zips and GitHub releases include it, so a store install shows the exact commit it came from.
+
+Considered: committing the commit ID in `deploy/` (a commit can't contain its own ID; writing the previous one would
+change `deploy/` on every build, break CI's deploy check and conflict on every merge); putting it in the manifest
+version (store versions must be numeric and increase); reading `.git` at runtime (an extension can only read files
+inside its own folder).

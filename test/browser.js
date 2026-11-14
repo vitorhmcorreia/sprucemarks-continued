@@ -92,11 +92,12 @@ async function connect(wsUrl) {
     return { send, console, close: () => ws.close() }
 }
 
-// Start the browser with the extension in `extDir` and a fresh profile holding the sample favorites.
-async function launch(extDir, port) {
+// Start the browser with the extension in `extDir` and a fresh profile holding the sample favorites (or `bookmarks`,
+// a Chromium Bookmarks-file object, for example a large generated collection).
+async function launch(extDir, port, bookmarks) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sprucemarks-browser-'))
     fs.mkdirSync(path.join(tmp, 'profile/Default'), { recursive: true })
-    fs.writeFileSync(path.join(tmp, 'profile/Default/Bookmarks'), JSON.stringify(sampleBookmarks()))
+    fs.writeFileSync(path.join(tmp, 'profile/Default/Bookmarks'), JSON.stringify(bookmarks || sampleBookmarks()))
     const args = ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',
         `--user-data-dir=${path.join(tmp, 'profile')}`, `--load-extension=${extDir}`, `--disable-extensions-except=${extDir}`,
         `--remote-debugging-port=${port}`, '--window-size=1280,800', 'about:blank']
