@@ -5,6 +5,7 @@
 Make the Sprucemarks Continued icons from the original Sprucemarks art (DECISIONS D10).
 
 - Store/manifest icon (icon-default-*): the original two-tree logo (original/logo.svg) in spruce green.
+- The page header logo (source/images/-logo.svg) is the same green drawing with the badge, as inline SVG.
 - Every icon (store, toolbar dark/light/green, and the toolbar pictures in the help messages) gets a small teal
   "continued" arrow badge in the bottom-right corner, cut out of the art with a transparent ring.
 
@@ -120,6 +121,13 @@ for (const brand of ['chrome', 'edge', 'firefox']) {
 }
 
 renderAll(browser, jobs, tmp)
+
+// The page header logo (inlined into every extension page by the build): same drawing, as vector, with its own mask
+// id so it can't clash with anything else on the page. Its colours are fixed in the SVG, not set by the theme CSS.
+const headerLogo = iconSvg(greenLogo()).replace(/id="cut"/, 'id="logo-cut"').replace('url(#cut)', 'url(#logo-cut)')
+    .replace(' width="100" height="100">', ' aria-hidden="true">')
+    .replace('<path ', '<path class="logo-back" ') // the first path is the back (outline) tree: lightened in the dark theme
+fs.writeFileSync(path.join(ROOT, 'source/images/-logo.svg'), headerLogo.replace(/\n/g, ''))
 
 fs.rmSync(tmp, { recursive: true, force: true })
 console.log(`icons written with ${path.basename(browser)}; run "node build.js" next`)

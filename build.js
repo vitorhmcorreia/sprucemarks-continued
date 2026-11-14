@@ -14,8 +14,8 @@ Rules, matching the original feri-config.js:
 Usage: node build.js                 build into deploy/
        node build.js --out <dir>     build into another folder
        node build.js --zip           also zip the output into dist/sprucemarks-continued-<version>.zip (store upload)
-       node build.js --no-tests      leave the background test suite out (for store releases); builds into
-                                     dist/package/ so deploy/ keeps the full build
+       node build.js --no-tests      release build: leaves the background test suite out and turns debug logging off
+                                     (shared.setting.log); builds into dist/package/ so deploy/ keeps the full build
 */
 
 const fs = require('fs')
@@ -31,8 +31,17 @@ const OUT = argv.includes('--out') ? path.resolve(argv[argv.indexOf('--out') + 1
     : path.join(ROOT, NO_TESTS ? 'dist/package' : 'deploy')
 const IGNORE = new Set(['.DS_Store', 'Thumbs.db'])
 
+// Release builds turn verbose console logging off (D14). Fail loudly if the setting ever moves.
+const LOG_ON = "'log': true // verbose logging"
+function releaseTransform(rel, text) {
+    if (!NO_TESTS || rel !== 'js/shared.js') return text
+    if (text.split(LOG_ON).length !== 2) throw new Error(`build: expected exactly one "${LOG_ON}" in source/js/shared.js`)
+    return text.replace(LOG_ON, "'log': false // verbose logging")
+}
+const readSource = (file) => releaseTransform(path.relative(SOURCE, file).split(path.sep).join('/'), fs.readFileSync(file, 'utf8'))
+
 function render(file, args) {
-    const text = fs.readFileSync(file, 'utf8')
+    const text = readSource(file)
     const parts = text.split(/<js>([\s\S]*?)<\/js>/)
     let code = ''
     parts.forEach((part, i) => {
@@ -61,6 +70,8 @@ function build(dir) {
         fs.mkdirSync(path.dirname(dest), { recursive: true })
         if (entry.name.endsWith('.jss')) {
             fs.writeFileSync(dest, render(src, []))
+        } else if (NO_TESTS && rel.split(path.sep).join('/') === 'js/shared.js') {
+            fs.writeFileSync(dest, readSource(src))
         } else {
             fs.copyFileSync(src, dest)
             fs.chmodSync(dest, 0o644) // a few source files are executable; the build output never needs to be
@@ -71,7 +82,7 @@ function build(dir) {
 fs.rmSync(OUT, { recursive: true, force: true })
 build(SOURCE)
 const version = JSON.parse(fs.readFileSync(path.join(OUT, 'manifest.json'), 'utf8')).version
-console.log(`built ${path.relative(ROOT, OUT) || OUT} (version ${version}${NO_TESTS ? ', no tests' : ''})`)
+console.log(`built ${path.relative(ROOT, OUT) || OUT} (version ${version}${NO_TESTS ? ', release: no tests, logging off' : ''})`)
 
 if (argv.includes('--zip')) {
     const dist = path.join(ROOT, 'dist')

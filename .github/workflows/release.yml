@@ -1,0 +1,63 @@
+# Pushing a version tag publishes a GitHub Release with the store zip attached. See DECISIONS D15.
+#
+#   1. bump "version" in source/manifest.json, add a changelog entry to source/page/-about.html.jss
+#   2. node build.js, commit, push (CI must be green)
+#   3. git tag -a v<version> -m "<release notes, Markdown>" && git push origin v<version>
+#
+# The annotated tag's message becomes the release notes. The same zip is what gets uploaded to Edge Add-ons.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Tag matches the manifest version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(node -p "require('./source/manifest.json').version")
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag v$tag does not match source/manifest.json version $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: deploy/ matches source/
+        run: |
+          node build.js
+          test -z "$(git status --porcelain -- deploy)" || { echo "::error::deploy/ is out of date at this tag"; exit 1; }
+
+      - name: Install Chrome for Testing
+        run: |
+          path=$(npx -y @puppeteer/browsers@2.3.0 install chrome@stable --path "$RUNNER_TEMP/browsers" | tail -1 | cut -d' ' -f2-)
+          echo "BROWSER=$path" >> "$GITHUB_ENV"
+
+      - name: Extension test suite
+        run: node test/run-tests.js
+
+      - name: Build the store zip
+        run: node build.js --no-tests --zip
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # actions/checkout fetches the commit, not the annotated tag object that holds the notes
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > notes.md
+          test -s notes.md || echo "Sprucemarks Continued $VERSION" > notes.md
+          gh release create "$GITHUB_REF_NAME" "dist/sprucemarks-continued-$VERSION.zip" \
+            --title "Sprucemarks Continued $VERSION" --notes-file notes.md --verify-tag

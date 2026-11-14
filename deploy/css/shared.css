@@ -519,8 +519,8 @@ header svg {
     width: 50px;
 }
 
-header svg path {
-    fill: #5f6368;
+body.dark header svg .logo-back {
+    fill: #66bb6a; /* the dark green outline tree is too dark on the dark theme */
 }
 
 header h1 {
@@ -1278,10 +1278,6 @@ body.dark a {
 
 body.dark header h1 {
     color: hsl(0,0%,65%);
-}
-
-body.dark header svg path {
-    fill: hsl(0,0%,65%);
 }
 
 body.dark h1,

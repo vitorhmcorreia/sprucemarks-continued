@@ -67,22 +67,32 @@ Edit files in `source/`, then build them into `deploy/` with Node.js (no depende
 
 ```
 node build.js                    # build deploy/
-node build.js --no-tests --zip   # store release: no test suite, zipped into dist/
+node build.js --no-tests --zip   # store release: no test suite, logging off, zipped into dist/
 ```
 
 `build.js` replaces Feri, the original build tool, which was unpublished from npm in 2026. Files and folders starting
 with `-` are includes only; `.jss` files are templates using `<js>include(...)</js>` and `<js>write(...)</js>`. The
 header of `build.js` describes the rules. `deploy/` is committed and is always the full build, test suite included.
 
+Releases are published by pushing a version tag; the steps are in [ARCHITECTURE.md](ARCHITECTURE.md#build-and-release).
+
 ## Development
 
 How the code fits together: [ARCHITECTURE.md](ARCHITECTURE.md). Why the fork is set up this way: [DECISIONS.md](DECISIONS.md).
 
-Use the `log` setting inside `source/js/shared.js` to enable or disable console logs for various events and operations.
+Use the `log` setting inside `source/js/shared.js` to enable or disable console logs for various events and operations
+(release builds turn it off automatically).
 
 ## Test
 
-From the background service worker, run `await test()` to use the test suite (not available in `--no-tests` builds).
+Run the test suite in a headless browser (Edge or Chromium; set `BROWSER=` to pick one):
+
+```
+node build.js && node test/run-tests.js
+```
+
+Or, with the extension loaded unpacked, run `await test()` in its service worker console (not available in
+`--no-tests` builds). CI runs the suite on every push.
 
 ## Privacy
 

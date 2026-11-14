@@ -9,8 +9,8 @@ Make the store listing images in store/ (D13):
 - screenshots/*.png          1280x800 screenshots of the real extension
 
 Screenshots come from the built extension in deploy/ (run "node build.js" first), loaded into a throwaway headless
-Edge/Chrome profile seeded with made-up sample favorites, driven over the DevTools protocol. Needs Node 22+ (built-in
-WebSocket) and a Chromium-family browser (set BROWSER to pick one).
+Edge/Chromium profile seeded with made-up sample favorites (test/browser.js), driven over the DevTools protocol.
+Needs Node 22+ (built-in WebSocket) and a browser that honours --load-extension (set BROWSER to pick one).
 
 Usage: node store/make-store-assets.js
 */
@@ -18,63 +18,11 @@ Usage: node store/make-store-assets.js
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const crypto = require('crypto')
-const { spawn, execFileSync } = require('child_process')
+const { sleep, connect, launch } = require('../test/browser') // browser driving and sample favorites, shared with the tests
 
 const ROOT = path.join(__dirname, '..')
 const DEPLOY = path.join(ROOT, 'deploy')
 const OUT = __dirname
-const PORT = 9333
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-function findBrowser() {
-    for (const name of [process.env.BROWSER, 'microsoft-edge', 'google-chrome', 'chromium', 'chromium-browser'].filter(Boolean)) {
-        try { return execFileSync('which', [name]).toString().trim() } catch (error) { /* next */ }
-    }
-    throw new Error('No Chromium-family browser found. Set BROWSER to its path.')
-}
-
-// Unpacked extensions get an ID derived from their folder path.
-const EXTENSION_ID = [...crypto.createHash('sha256').update(DEPLOY).digest('hex').slice(0, 32)]
-    .map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('')
-
-//------------------
-// Sample favorites
-//------------------
-function sampleBookmarks() {
-    // Generic public sites, deliberately unsorted, with one exact duplicate and a few near-duplicates for the tools.
-    let id = 10
-    const stamp = () => String(13370000000000000 + id * 1000000)
-    const guid = () => '00000000-0000-4000-8000-' + String(id).padStart(12, '0')
-    const bm = (name, url) => ({ type: 'url', id: String(id++), name, url, date_added: stamp(), guid: guid() })
-    const folder = (name, children) => ({ type: 'folder', id: String(id++), name, children, date_added: stamp(), date_modified: stamp(), guid: guid() })
-    const root = (rid, name, children, g) => ({ type: 'folder', id: rid, name, children, date_added: stamp(), date_modified: stamp(), guid: g })
-    const bar = [
-        folder('Recipes', [bm('Sourdough starter guide', 'https://www.kingarthurbaking.com/recipes/sourdough-starter-recipe'), bm('BBC Good Food', 'https://www.bbcgoodfood.com/'), bm('Allrecipes', 'https://www.allrecipes.com/')]),
-        bm('Wikipedia', 'https://www.wikipedia.org/'),
-        bm('MDN Web Docs', 'https://developer.mozilla.org/'),
-        folder('Travel', [bm('Rome2Rio', 'https://www.rome2rio.com/'), bm('OpenStreetMap', 'https://www.openstreetmap.org/'), bm('Wikivoyage', 'https://www.wikivoyage.org/')]),
-        bm('Hacker News', 'https://news.ycombinator.com/'),
-        bm('GitHub', 'https://github.com/'),
-        folder('Reading', []),
-        bm('Wikipedia - Spruce', 'https://en.wikipedia.org/wiki/Spruce')
-    ]
-    const other = [
-        folder('Music', [bm('Bandcamp', 'https://bandcamp.com/'), bm('MusicBrainz', 'https://musicbrainz.org/')]),
-        bm('MDN Web Docs', 'https://developer.mozilla.org/'),
-        bm('Open Library', 'https://openlibrary.org/'),
-        bm('Project Gutenberg', 'https://www.gutenberg.org/'),
-        bm('Archive', 'https://archive.org/'),
-        bm('Archive.org', 'https://archive.org/details/texts'),
-        bm('Project Gutenberg (English)', 'http://www.gutenberg.org/?lang=en'),
-        bm('Open Library search', 'https://openlibrary.org/#search')
-    ]
-    return { version: 1, roots: {
-        bookmark_bar: root('1', 'Favorites bar', bar, '0bc5d13f-2cba-5d74-951f-3f233fe6c908'),
-        other: root('2', 'Other favorites', other, '82b081ec-3dd3-529c-8475-ab6c344590dd'),
-        synced: root('3', 'Mobile favorites', [], '4cf2e351-0e85-532b-bb37-df045d8f8d0f')
-    } }
-}
 
 //-------------
 // Screenshots
@@ -137,35 +85,14 @@ function logoSvg(size) {
 async function main() {
     if (!fs.existsSync(path.join(DEPLOY, 'manifest.json'))) throw new Error('deploy/ is missing: run "node build.js" first')
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sprucemarks-store-'))
-    fs.mkdirSync(path.join(tmp, 'profile/Default'), { recursive: true })
-    fs.writeFileSync(path.join(tmp, 'profile/Default/Bookmarks'), JSON.stringify(sampleBookmarks()))
     fs.mkdirSync(path.join(OUT, 'screenshots'), { recursive: true })
-
-    const browser = spawn(findBrowser(), ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run',
-        `--user-data-dir=${path.join(tmp, 'profile')}`, `--load-extension=${DEPLOY}`, `--disable-extensions-except=${DEPLOY}`,
-        `--remote-debugging-port=${PORT}`, '--window-size=1280,800', 'about:blank'], { stdio: 'ignore' })
+    const browser = await launch(DEPLOY, 9333)
 
     try {
-        for (let i = 0; i < 50; i++) {
-            try { await fetch(`http://127.0.0.1:${PORT}/json`); break } catch (error) { await sleep(200) }
-        }
-        await sleep(3000) // let the service worker start (it opens its own first-install tab)
-        const targets = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json()
-        const page = targets.find((t) => t.type === 'page' && t.url === 'about:blank')
-        const ws = new WebSocket(page.webSocketDebuggerUrl)
-        await new Promise((resolve) => ws.addEventListener('open', resolve))
-        let n = 0
-        const pending = {}
-        ws.addEventListener('message', (event) => {
-            const message = JSON.parse(event.data)
-            if (message.id && pending[message.id]) { pending[message.id](message); delete pending[message.id] }
-        })
-        const send = (method, params = {}) => new Promise((resolve, reject) => {
-            const id = ++n
-            pending[id] = resolve
-            ws.send(JSON.stringify({ id, method, params }))
-            setTimeout(() => reject(new Error('timeout: ' + method)), 20000)
-        })
+        await sleep(3000) // let the service worker finish starting (it opens its own first-install tab)
+        const page = (await browser.targets()).find((t) => t.type === 'page' && t.url === 'about:blank')
+        const tab = await connect(page.webSocketDebuggerUrl)
+        const send = tab.send
         const capture = async (file, width, height, transparent) => {
             await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
             if (transparent) await send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } })
@@ -185,7 +112,7 @@ async function main() {
 
         for (const shot of SHOTS) {
             await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false })
-            await send('Page.navigate', { url: `chrome-extension://${EXTENSION_ID}/${shot.url}` })
+            await send('Page.navigate', { url: `chrome-extension://${browser.id}/${shot.url}` })
             // pages keep #content hidden until the service worker has answered
             await send('Runtime.evaluate', { awaitPromise: true, expression: `(async () => {
                 for (let i = 0; i < 100; i++) {
@@ -207,10 +134,9 @@ async function main() {
         await openHtml(tileHtml(1400, 560, 300, 104, 36))
         await capture(path.join(OUT, 'tile-large-1400x560.png'), 1400, 560)
 
-        ws.close()
+        tab.close()
     } finally {
-        browser.kill()
-        await sleep(500)
+        await browser.close()
         fs.rmSync(tmp, { recursive: true, force: true })
     }
 }

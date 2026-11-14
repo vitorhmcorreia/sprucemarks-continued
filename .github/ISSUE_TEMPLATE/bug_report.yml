@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in Sprucemarks Continued doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please don't paste real bookmark titles or URLs you'd rather keep private:
+        the troubleshooting information below only contains hashes, never your bookmarks themselves.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Enable "Automatic Sorting" and sort the favorites bar A–Z
+        2. Add a favorite to ...
+        3. ...
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Microsoft Edge Add-ons store
+        - Manually (Load unpacked) from a GitHub release zip
+        - From a clone of the repository
+    validations:
+      required: true
+  - type: textarea
+    id: troubleshooting
+    attributes:
+      label: Troubleshooting information
+      description: Open the extension's About page, click "Copy Information" in the Troubleshooting section, and paste it here. It includes the version, browser, options and hashed bookmark structure.
+      render: text
+    validations:
+      required: true
