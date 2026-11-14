@@ -1,7 +1,9 @@
 # Architecture
 
-Sprucemarks Continued is a Manifest V3 browser extension (Chrome, Edge, Firefox) with no dependencies, no server and
-no network access. It needs two permissions: `bookmarks` and `storage`. Decisions behind this layout are in
+Sprucemarks Continued is a Manifest V3 browser extension for Edge and Chrome (the original also ran in Firefox; the fork
+isn't tested there) with no dependencies and no server. It needs two permissions, `bookmarks` and `storage`, and
+declares optional host permissions (`http://*/*`, `https://*/*`) that only the Dead Links page asks for, when the user
+clicks Check Links; those checks are its only network requests. Decisions behind this layout are in
 [DECISIONS.md](DECISIONS.md).
 
 ## Layout
@@ -10,11 +12,14 @@ no network access. It needs two permissions: `bookmarks` and `storage`. Decision
 source/                  edit here
   manifest.json          name, version, permissions (version is date-based: YYYY.M.D.N)
   _locales/en/           extension name and store description
-  background.js.jss      service worker template: includes the polyfill, shared.js, -background.js, -background-test.js
+  background.js.jss      service worker template: includes the polyfill, shared.js, dead-links.js, -background.js,
+                         -background-test.js
   js/-background.js      all sorting logic, listeners, storage, messaging (the "local" object)
   js/-background-test.js test suite, run with `await test()` from the service worker console
-  js/shared.js           helpers used by both the service worker and the pages (the "shared" object): log, storage, theme
-  js/browser-polyfill.js lets the code use the `browser.*` API in Chrome and Edge
+  js/shared.js           helpers used by both the service worker and the pages (the "shared" object): log, timing,
+                         theme and icon, scrolling, one-time messages, time formatting
+  js/browser-polyfill.js lets the code use the `browser.*` API in Chrome and Edge; it only wraps the APIs the code uses,
+                         so a new API call needs a line here
   js/page/*.js           one script per extension page (dead-links.js starts the page, dead-links-tool.js is the checker)
   js/dead-links.js       dead-link logic with no page or network access; also included in the service worker for tests
   page/-<page>.html.jss  page templates (options, tools, dead-links, preferences, about)
@@ -28,8 +33,9 @@ art/make-icons.js        regenerates the icons and the page header logo from art
 test/run-tests.js        runs the extension's test suite in a headless browser (D15)
 test/browser.js          shared headless-browser helpers and the made-up sample favorites
 test/hooks-install.sh    tests .githooks/install in throwaway repositories (runs in CI)
-.github/workflows/       CI on every push, GitHub Release on every version tag (D15)
-docs/                    design notes for planned features (dead-link checker)
+.github/workflows/       CI on pushes to main and on pull requests, GitHub Release on every version tag (D15)
+.github/ISSUE_TEMPLATE/  bug report form (asks for About's "Copy Information")
+docs/                    design notes (dead-link checker)
 store/                   Edge listing: listing.md (copy for Partner Center), logo, tiles, screenshots, and
                          make-store-assets.js, which regenerates the images from deploy/ (D13)
 dist/                    store zips (git-ignored)
@@ -48,31 +54,39 @@ bookmarks bar, other bookmarks, mobile), load options and preferences from `brow
 icon and badge, register listeners, then sort everything once (`bookmark_resort`). MV3 workers can be stopped at any
 time, so listeners are registered early and each one waits for `start_done()` before acting.
 
-**Sorting.** Bookmark events (`onCreated`, `onChanged`, `onMoved`, `onRemoved`, `onChildrenReordered`, import
-began/ended) go through `bookmark_sort_buffer`, which waits half a second (Chrome briefly locks bookmarks after a user action), sorts, and sorts once more for good measure. `bookmark_sort(id, parent_id, recurse,
+**Sorting.** `onCreated`, `onChanged`, `onMoved` and `onChildrenReordered` go through `bookmark_sort_buffer`, which
+waits half a second (Chrome briefly locks bookmarks after a user action), sorts, and sorts once more for good measure.
+Listeners only sort when Automatic Sorting is on, and not while an import (`onImportBegan`) or a full re-sort is
+running (`listener_react_to_changes`). `onRemoved` doesn't sort (it logs history and refreshes open pages).
+`onImportEnded`, which Edge also fires when favorites sync, runs a full re-sort (`bookmark_resort`), as do start-up
+and option changes. `bookmark_sort(id, parent_id, recurse,
 ancestor)` reads a folder's children, skips folders whose root is switched off in the options, sorts with
 `bookmark_compare` using that root's sort order (`<root>_sort`, or `<root>_sub_sort` inside subfolders, e.g. title by locale,
 date or URL) and the global `group_folders` (folders first), and only calls
 `bookmark_reorder`/`bookmark_move` when the order actually changed. Folders being sorted sit in
 `local.queue.parent_folders` so the listeners can ignore the move events the extension causes itself.
 
-**Pages.** Options, preferences, tools and about are ordinary extension pages. Each opens a long-lived port to the
+**Pages.** Options, tools, dead links, preferences and about are ordinary extension pages. Each opens a long-lived port to the
 worker (`listener_port_connect`), asks for its data (`init-options`, `init-about`, ...), and sends changes back
 (`option`, `preference`, tool actions). The worker saves the change, sends it to every open page (`port_message_all`)
 so they stay in step, and re-sorts. The toolbar icon focuses an open page or opens the preferred one
-(`extension_page`).
+(`extension_page`). The Dead Links page only uses the port for theme and preferences (`init-preferences`); it reads,
+updates and removes favorites with `browser.bookmarks` itself.
 
 **Icons.** `icon-default-*` is the manifest/store icon; `icon-dark|light|green-*` are the toolbar icons the user
 picks in Preferences (`icon_set`). Change the art in `art/`, run `node art/make-icons.js`, then `node build.js`.
 
-**Tools.** Duplicate, similar and empty-folder finders, and an optional bookmark history log kept in local storage.
+**Tools.** Duplicate, similar and empty-folder finders, and a bookmark history log (added, modified, removed; the last 4
+days, at most 1,000 events) kept in local storage.
 The service worker recomputes all three finders over the whole tree when Tools opens and after bookmark changes.
 "Find similar" buckets addresses by site + path, then by user name, password and port class, in one pass (D19); it used
 to compare every pair and was the slow part on large collections.
 
 **Dead Links.** A separate page (D17): nothing runs until the user clicks Check Links. The page itself does the checking
 (an MV3 service worker can be stopped mid-check), asks for optional host access first, and keeps results, the ignore
-list and the skip-local option in `browser.storage.local` under `dead_links`. Design: `docs/dead-link-checker.md`.
+list, the skip-local option and the last run in `browser.storage.local` under `dead_links`. Requests are paced per site
+and back off when a site says "slow down" (D21); removing first downloads a bookmarks-file backup. Pure logic (classify,
+pace, back off, backup file) is in `js/dead-links.js` and tested by the suite. Design: `docs/dead-link-checker.md`.
 
 **Timing log (D18).** `timing(name, start, detail)` in `shared.js` records how long a step took. The service worker
 times the Tools scans (`timing_tools_scan`) and full sorts, receives timings from the Tools page over the port
@@ -92,13 +106,18 @@ notice for people moving from the archived original (D6).
 - `node build.js --no-tests --zip` is the release build: no test suite, debug logging off (D14), built into
   `dist/package/` and zipped to `dist/sprucemarks-continued-<version>.zip`; `deploy/` is left alone.
 - `node test/run-tests.js` runs the test suite against `deploy/` in headless Edge/Chromium (`BROWSER=` to choose).
-  CI runs it on every push, together with a check that `deploy/` matches `source/`.
+  CI runs it on pushes to `main` and on pull requests, together with a check that `deploy/` matches `source/` and
+  `sh test/hooks-install.sh` (the git hook installer).
 - To release:
   1. bump `version` in `source/manifest.json` (and `check_version` in `install_or_upgrade` only if upgraders should
      see a new one-time message), add a changelog entry to `source/page/-about.html.jss`;
   2. `node build.js`, load `deploy/` unpacked and look it over, commit and push, wait for CI to pass;
   3. `git tag -a v<version> -m "<release notes>"` and `git push origin v<version>`: the Release workflow checks the
      version, runs the tests, builds the zip and publishes the GitHub Release (D12, D15);
-  4. upload that zip (from the release, or `node build.js --no-tests --zip`) to Partner Center.
+  4. upload that zip (from the release, or `node build.js --no-tests --zip`) to Partner Center, with the notes from
+     `store/listing.md` (Updates). Only when no earlier version is still in review: a new submission replaces the one
+     in review and restarts its review (Microsoft, "Update or remove an extension"). Prepare and merge the release PR
+     any time; push the tag when the store is ready for it.
 - Refresh the store images when the UI changed: `node store/make-store-assets.js` (after `node build.js`).
-- Store: Microsoft Edge Add-ons first (D3); what to paste where is in `store/listing.md`. Privacy answers: no data collected, see [PRIVACY.md](PRIVACY.md).
+- Store: Microsoft Edge Add-ons, live since 2026-11-14 (D3); what to paste where is in `store/listing.md`. Privacy
+  answers: no data collected, see [PRIVACY.md](PRIVACY.md).

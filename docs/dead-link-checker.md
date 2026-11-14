@@ -1,7 +1,8 @@
 # Design: dead-link checker
 
-Status: **built** on branch `feature/dead-link-checker` (2026-11-14), to be merged after the first Edge Add-ons listing
-is approved (DECISIONS D8, D16). Code: `source/js/dead-links.js` (pure logic, tested), `source/js/page/dead-links-tool.js`
+Status: **merged** into `main` (pull request #1, 2026-11-14) after a try-out on a real 4,288-favorite collection; ships
+in 2026.11.15.0 (release pull request #7, store submission after 2026.11.14.1 is published). DECISIONS D8, D16, D17,
+D21. Code: `source/js/dead-links.js` (pure logic, tested), `source/js/page/dead-links-tool.js`
 (checking and display), `source/js/page/dead-links.js` (page start-up), `source/page/-dead-links.html.jss`.
 
 ## Goal
@@ -39,34 +40,40 @@ double the upkeep.
 - The extension's own `browser` polyfill (`js/browser-polyfill.js`) only wraps the APIs it uses, so `permissions` and
   `bookmarks.update` were added to it.
 
-## Where the checking runs: the Tools page, not the service worker
+## Where the checking runs: the Dead Links page, not the service worker
 
 MV3 service workers are stopped after about 30 seconds without extension events, and a few hundred fetches can take
-minutes. The Tools page is a normal extension page that lives as long as its tab, and with host permission granted it
-can fetch any URL without CORS limits. So the page runs the check and shows progress ("Checked 120 of 840"), and the
-service worker isn't involved beyond what it already does (listing favorites, removing the selected ones). Closing the
-tab stops the check. The results found so far are kept (see Results).
+minutes. The Dead Links page is a normal extension page that lives as long as its tab, and with host permission granted
+it can fetch any URL without CORS limits. So the page runs the check and shows progress ("Checking: 120 of 840
+addresses…"), and reads, updates and removes favorites with `browser.bookmarks` itself; the service worker only
+supplies theme and preferences. Closing the tab stops the check; results are saved every 25 addresses and at the end.
 
 ## How one URL is checked
 
-1. Skip anything that isn't `http:` or `https:` (`javascript:`, `file:`, `chrome:`, `edge:`, `about:`, `data:`): shown as "not checked".
+1. Skip anything that isn't `http:` or `https:` (`javascript:`, `file:`, `chrome:`, `edge:`, `about:`, `data:`); these
+   are simply left out. With **Skip local and intranet addresses** on, local addresses are skipped too and counted in
+   the status line ("2 local addresses skipped").
 2. `fetch(url, { method: 'HEAD', redirect: 'follow', credentials: 'omit', cache: 'no-store', signal })` with a 15 s
    timeout (`AbortController`). `credentials: 'omit'` means no cookies are sent, so a check never acts as the logged-in user.
-3. If HEAD is refused (405, 501, or a network error that a GET might not hit), retry once with GET and abort as soon
-   as the headers arrive, so no page body is downloaded.
+3. If HEAD fails with a network error or any status of 400 or more, except 429 and 503 (those back off instead, see
+   "Being polite"), confirm with one GET, aborted as soon as the headers arrive, so no page body is downloaded. Many
+   servers answer HEAD badly, so a failed HEAD alone never decides.
 4. Classify:
 
 | Outcome | Result shown | Pre-selected for removal? |
 |---|---|---|
 | 2xx, or 3xx ending in 2xx | OK (not listed) | n/a |
-| Redirected to a different host or path | "Moved to …" (informational) | no |
+| Redirected to a different host or path, ending on a working page | "Moved to a new address", with **Update address** | no |
+| A specific page redirected to the site's home page | "Redirects to the site's home page" (usually gone), no Update | no |
+| Redirected to a sign-in page | "Redirects to a sign-in page", no Update | no |
 | Same page with parameters only added (YouTube's `cbrd=1&ucbcb=1` without a consent cookie, tracking parameters) | OK (not moved) | n/a |
 | Redirected to a cookie-consent page (`consent.youtube.com`, …/cookie-consent/) | "Redirects to a cookie-consent page", no Update | no |
 | 404, 410 | **Not found** | yes |
 | DNS failure / connection refused, twice, 10 s apart, and again in the final pass | **Unreachable** | **no** |
 | 429 / 503 | site is paused and retried later (see below); after 3 tries "Couldn't verify (rate limited, 429)" / "Server error (503)" | no |
 | 401, 403, other 4xx | "Couldn't verify (HTTP n)" | no |
-| other 5xx, timeout | "Server error / timed out" | no |
+| other 5xx | "Server error (n)" | no |
+| no answer within 15 s | "Timed out" | no |
 
 Only "Not found" is pre-selected: a server answered that the page is gone. "Unreachable" counts as dead but is never
 pre-selected, because a dropped connection makes every site look unreachable (raised by the user, 2026-11-14).
@@ -95,9 +102,11 @@ Tightened on 2026-11-14 (D21), after the user asked whether a long check could l
 
 ## Results
 
-- Saved in `browser.storage.local` (`tool_dead_links`: URL → result and time checked), so reopening Tools shows the
-  last check with "checked 2 days ago".
-- **Recheck** re-runs only the non-OK ones; **Check Links** again does everything.
+- Saved in `browser.storage.local` under `dead_links`: `results` (by favorite ID: address, title, folder, result,
+  status, new address, when checked; only problems are kept), `ignored` (favorite IDs), `skip_local`, and `last_run`
+  (when, how many checked, problems, local addresses skipped, whether it was stopped). Reopening the page shows the
+  last check ("Last checked 2 days ago: …").
+- **Recheck Problems** re-runs only the listed, non-ignored results; **Check Links** again does everything.
 - **Backup before removing** (asked for by the user, 2026-11-14): Remove Selected first downloads
   `sprucemarks-removed-<date>-<time>.html`, a standard bookmarks file (`dead_links.backup_html`) with the favorites about
   to go, in their original folders under one dated folder. Any browser restores it with "import bookmarks from HTML
@@ -110,28 +119,29 @@ Tightened on 2026-11-14 (D21), after the user asked whether a long check could l
 
 ## Privacy and store updates that ship with it
 
-- `PRIVACY.md`: "When you run Check Links, your browser contacts each bookmarked website directly to see if the page
-  still exists. Nothing is sent to us or anyone else; no cookies are sent with these checks." The no-network wording
-  in the About page and the store description changes to match.
+- `PRIVACY.md` has a "Dead Links (only when you use it)" section; the About page ("About This Fork") and the store
+  description say the checks contact the bookmarked sites directly and nothing is sent anywhere else.
 - Edge listing: a justification for the optional host permission, and the certification notes explain it's requested
   only when the user clicks Check Links.
 
 ## Tests
 
-- Unit tests in `-background-test.js` style for the classifier (status code and error to result) and the per-host queue.
-- Built: `dead_links_checkable`, `dead_links_is_local`, `dead_links_redirect_kind`, `dead_links_classify` and
-  `dead_links_queue` in `-background-test.js` (`js/dead-links.js` is included in the service worker for this).
-- The network part isn't in CI (it would depend on real websites): one manual run against a live page, a 404 and a
-  non-existent domain before release.
+- In the suite (`-background-test.js`; `js/dead-links.js` is included in the service worker for this):
+  `dead_links_checkable`, `dead_links_is_local`, `dead_links_redirect_kind`, `dead_links_classify`, `dead_links_queue`,
+  `dead_links_queue_slow_down`, `dead_links_backoff` and `dead_links_backup_html`.
+- The network part isn't in CI (it would depend on real websites). Checked by hand: full checks and rechecks on the
+  user's real collection (2026-11-14), and a local test server that answers 429 with `Retry-After` and 404.
 
 ## Decided with the user (2026-11-14)
 
 1. **Moved links:** offer **Update address** only when there is a real new address: the redirect ends on a working
-   (2xx) page at a different URL. Not found / unreachable rows have no new address and only offer removal. A redirect
-   to the site's home page or a login page is shown as "Redirects to the site's home page" with no Update button,
-   since that usually means the page is gone, not moved.
+   (2xx) page at a different URL, and not merely the same page with parameters added. Not found / unreachable rows have
+   no new address and only offer removal. Redirects to the site's home page, a sign-in page or a cookie-consent page
+   have their own results and no Update button, since they don't say where the page went.
 2. **Local and intranet addresses:** an option, **Skip local and intranet addresses**, on by default. It covers
-   `localhost`, `127.0.0.0/8`, `::1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, names ending in `.local`,
-   `.lan`, `.internal` or `.home.arpa`, and single-label hostnames (`http://wiki/`). Skipped favorites show as "not checked".
+   `localhost` (and `*.localhost`), `127.0.0.0/8`, `::1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
+   `169.254.0.0/16`, IPv6 unique-local (`fc00::/7`) and link-local (`fe80::/10`) addresses, names ending in `.local`,
+   `.lan`, `.internal`, `.intranet`, `.corp` or `.home.arpa`, and single-label hostnames (`http://wiki/`). Skipped
+   favorites aren't listed; the status line counts them.
 3. **Ignore list, from the start:** an **Ignore** button per result row; ignored favorite IDs are kept in
    `browser.storage.local` and left out of results, with a "Show N ignored" link to see and un-ignore them.
