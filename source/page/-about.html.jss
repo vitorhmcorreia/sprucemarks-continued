@@ -72,7 +72,7 @@
                     </p>
 
                     <p>
-                        Sprucemarks Continued does not collect, transmit, or sell any data. Your <span class="only-non-edge">bookmarks</span><span class="only-edge">favorites</span> and options never leave your browser. Source code and issues are on <a href="https://github.com/vitorhmcorreia/sprucemarks" rel="noopener noreferrer" target="_blank">GitHub</a>.
+                        Sprucemarks Continued does not collect, transmit, or sell any data. Your <span class="only-non-edge">bookmarks</span><span class="only-edge">favorites</span> and options never leave your browser. Source code and issues are on <a href="https://github.com/vitorhmcorreia/sprucemarks-continued" rel="noopener noreferrer" target="_blank">GitHub</a>.
                     </p>
                 </div><!-- box-inner -->
             </div><!-- box -->
@@ -89,6 +89,9 @@
                         </li>
                         <li>
                             Updated name, about page, and messages to identify the fork.
+                        </li>
+                        <li>
+                            New icon: the familiar trees with a small teal arrow, so you can tell the fork from the original.
                         </li>
                     </ul>
                 </div><!-- box-inner -->

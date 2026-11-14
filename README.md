@@ -18,15 +18,38 @@ the original author.
 
 ## Install
 
-Store listing: Microsoft Edge Add-ons (submission in progress). A Chrome Web Store listing may follow later.
+### From the Microsoft Edge Add-ons store
 
-To run it unpacked, build it first (see [Build](#build)), then:
+Coming soon: the listing is being submitted. Store installs update automatically.
 
-For Chrome, navigate to `chrome://extensions` and enable developer mode. Then use `load unpacked` to select the `deploy` folder as the extension directory.
+### Manually, in Chrome, Edge, Brave, Opera or Vivaldi
 
-For Edge, navigate to `edge://extensions/` and enable developer mode. Then use `load unpacked` to select the `deploy` folder as the extension directory.
+Use this if you're on Chrome (there's no Chrome Web Store listing yet) or you'd rather not use a store.
 
-For Firefox, navigate to `about:debugging` and enable `add-on debugging`. Then use `load temporary add-on` and select the `manifest.json` file within the `deploy` folder. If Firefox does not load the extension, you may need to replace the background object inside `source/manifest.json` with the following code.
+1. Download `sprucemarks-continued-<version>.zip` from the latest release on the [Releases page](https://github.com/vitorhmcorreia/sprucemarks-continued/releases).
+2. Unzip it into a folder you'll keep, for example `Documents/Sprucemarks Continued`. The browser loads the extension
+   from that folder every time it starts, so don't delete or move it.
+3. Open the extensions page: `chrome://extensions` (Chrome, Brave, Vivaldi), `edge://extensions` (Edge) or
+   `opera://extensions` (Opera).
+4. Turn on **Developer mode** (a switch at the top right, or in the left sidebar in Edge).
+5. Click **Load unpacked** and pick the folder from step 2 (the one with `manifest.json` in it).
+6. Optional: pin it from the extensions (puzzle piece) menu so the toolbar icon stays visible.
+
+Good to know:
+
+- **No automatic updates.** To be told about new versions, click **Watch → Custom → Releases** on the GitHub repo.
+  To update, unzip the new release over the same folder (replace the files), then click the reload arrow on the
+  extension's card. Keep the same folder path: the browser ties your options to it, so a new path starts with defaults.
+- **Developer mode warnings.** Some browsers show a reminder about developer-mode extensions at start-up. It's
+  expected for anything loaded this way; you can dismiss it.
+- **Coming from the original Sprucemarks?** Remove it once this one is running, so the two don't both sort, then set
+  your options again (there are only a few).
+
+### Firefox
+
+Not packaged for Firefox yet. For testing, open `about:debugging`, choose **This Firefox → Load Temporary Add-on**, and
+select `manifest.json` in the unzipped folder. Firefox removes temporary add-ons when it closes. If it refuses to load,
+replace the `background` object in `manifest.json` with:
 
 ```
 "background": {
@@ -34,8 +57,9 @@ For Firefox, navigate to `about:debugging` and enable `add-on debugging`. Then u
 },
 ```
 
-Moving from the original Sprucemarks: a store install is a separate extension, so set your options again (they are
-few). Remove the original afterwards so the two don't sort at the same time.
+### From a clone (developers)
+
+Clone the repo and load the `deploy/` folder unpacked, as in the manual steps above. It's always built and committed.
 
 ## Build
 

@@ -17,7 +17,7 @@
         "128": "images/icon/icon-default-128.png"
     },
     "manifest_version": 3,
-    "homepage_url": "https://github.com/vitorhmcorreia/sprucemarks",
+    "homepage_url": "https://github.com/vitorhmcorreia/sprucemarks-continued",
     "minimum_chrome_version": "102",
     "name": "Sprucemarks Continued",
     "options_ui": {

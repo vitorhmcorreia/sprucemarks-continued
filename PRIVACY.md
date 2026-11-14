@@ -12,4 +12,4 @@ store, transmit, share, or sell any personal or usage data.
 - **No network requests:** the extension does not contact any server, has no analytics, ads, or tracking, and contains
   no remote code.
 
-Questions or concerns: open an issue at https://github.com/vitorhmcorreia/sprucemarks/issues.
+Questions or concerns: open an issue at https://github.com/vitorhmcorreia/sprucemarks-continued/issues.
