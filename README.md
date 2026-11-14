@@ -1,6 +1,7 @@
 # Sprucemarks Continued
 
-A web browser extension that automatically sorts your bookmarks by title, date, or URL.
+A web browser extension that automatically sorts your bookmarks by title, date, or URL. It also finds empty folders,
+duplicate and similar bookmarks (Tools), and bookmarks whose page is gone or has moved (Dead Links).
 
 **Sprucemarks Continued is an unofficial community fork of [Sprucemarks](https://github.com/nightmode) by Kai Nightmode.**
 The original was archived in August 2026, removed from the browser stores on November 1, 2026, and dedicated to the
@@ -105,11 +106,12 @@ node build.js && node test/run-tests.js
 ```
 
 `sh test/hooks-install.sh` tests the git hook installer. Or, with the extension loaded unpacked, run `await test()` in its service worker console (not available in
-`--no-tests` builds). CI runs the suite on every push.
+`--no-tests` builds). CI runs the suite on every push to `main` and every pull request.
 
 ## Privacy
 
-Sprucemarks Continued collects no data. See [PRIVACY.md](PRIVACY.md).
+Sprucemarks Continued collects no data. The only network requests are the Dead Links checks, made from your browser
+to your bookmarked sites, and only when you click Check Links and allow it. See [PRIVACY.md](PRIVACY.md).
 
 ## License
 
