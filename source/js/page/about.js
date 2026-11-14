@@ -97,7 +97,7 @@ const build_text = local.function.build_text = function build_text() {
     const build = local.build
 
     if (!build || !build.short) {
-        return 'unknown (no build-info.json: run "node build.js", or enable the git hooks with "git config core.hooksPath .githooks")'
+        return 'unknown (no build-info.json: run "node build.js", or run "sh .githooks/install" once in the clone)'
     } // if
 
     let text = build.short + ' on ' + build.branch

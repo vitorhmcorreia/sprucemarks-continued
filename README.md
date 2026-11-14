@@ -63,10 +63,11 @@ Clone the repo and load the `deploy/` folder unpacked, as in the manual steps ab
 Run this once in the clone so the About page can show which commit you're running, even without Node.js:
 
 ```
-git config core.hooksPath .githooks
+sh .githooks/install
 ```
 
-The hooks write `deploy/build-info.json` (not in git) after every `git switch`, `git pull` or rebase; `node build.js`
+It adds one line to the clone's own post-checkout, post-merge and post-rewrite hooks (keeping anything already there),
+so `deploy/build-info.json` (not in git) is rewritten after every `git switch`, `git pull` or rebase; `node build.js`
 writes it too. Reload the extension afterwards.
 
 ## Build

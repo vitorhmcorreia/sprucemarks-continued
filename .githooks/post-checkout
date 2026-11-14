@@ -1,3 +1,0 @@
-#!/bin/sh
-# See write-build-info. Never blocks git.
-"$(dirname "$0")/write-build-info" || true

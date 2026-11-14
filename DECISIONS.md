@@ -187,8 +187,10 @@ a scan that is now cheap enough to just rerun.
 
 The user tests branches on more than one machine and wanted to see which "version" is loaded; the manifest version
 doesn't change between commits. `build-info.json` (commit, branch or tag, commit date, uncommitted changes) is written
-next to the manifest by `node build.js`, and by small git hooks (`.githooks/`, enabled once per clone with
-`git config core.hooksPath .githooks`) after every switch, pull or rebase, for machines without Node. In `deploy/` it
+next to the manifest by `node build.js`, and after every switch, pull or rebase by a line that `sh .githooks/install`
+adds to the clone's own post-checkout, post-merge and post-rewrite hooks, for machines without Node. The installer
+appends instead of setting `core.hooksPath`: that setting replaces the whole hooks folder and would silently switch off
+any other hook, such as a pre-commit scan for personal data (caught when the first version tried to use it). In `deploy/` it
 is git-ignored; store zips and GitHub releases include it, so a store install shows the exact commit it came from.
 
 Considered: committing the commit ID in `deploy/` (a commit can't contain its own ID; writing the previous one would
