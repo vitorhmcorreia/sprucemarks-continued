@@ -1729,3 +1729,155 @@ local.test.shared_url = function test_shared_url() {
         'Expected shared.url.extension to end with a "/" character.'
     )
 } // test_shared_url
+//------------
+// Dead Links
+//------------
+local.test.dead_links_checkable = function test_dead_links_checkable() {
+    /*
+    Only http and https favorites can be checked.
+    */
+
+    const cases = {
+        'https://example.com/'       : true,
+        'http://example.com/page'    : true,
+        'javascript:alert(1)'        : false,
+        'file:///home/user/notes.txt': false,
+        'edge://settings'            : false,
+        'not a url'                  : false
+    } // cases
+
+    for (const url in cases) {
+        expect(dead_links.checkable(url) === cases[url],
+            'Expected dead_links.checkable("' + url + '") to return ' + cases[url] + '.'
+        )
+    } // for
+} // test_dead_links_checkable
+
+local.test.dead_links_is_local = function test_dead_links_is_local() {
+    /*
+    Local and intranet addresses are recognised; public ones are not.
+    */
+
+    const cases = {
+        'http://localhost:8080/'        : true,
+        'http://127.0.0.1/'             : true,
+        'http://10.1.2.3/'              : true,
+        'http://172.16.0.1/'            : true,
+        'http://172.32.0.1/'            : false,
+        'http://192.168.1.26/'          : true,
+        'http://[::1]/'                 : true,
+        'http://[fd12:3456::1]/'        : true,
+        'http://nas.local/'             : true,
+        'http://router.lan/'            : true,
+        'http://printer.home.arpa/'     : true,
+        'http://wiki/'                  : true,
+        'https://example.com/'          : false,
+        'https://8.8.8.8/'              : false,
+        'https://en.wikipedia.org/wiki/': false
+    } // cases
+
+    for (const url in cases) {
+        expect(dead_links.is_local(url) === cases[url],
+            'Expected dead_links.is_local("' + url + '") to return ' + cases[url] + '.'
+        )
+    } // for
+} // test_dead_links_is_local
+
+local.test.dead_links_redirect_kind = function test_dead_links_redirect_kind() {
+    /*
+    Redirects are told apart: same page, real move, home page, sign-in page.
+    */
+
+    const cases = [
+        ['https://example.com/page', 'https://example.com/page/', 'none'],
+        ['https://example.com/page', 'https://example.com/page#top', 'none'],
+        ['http://example.com/page', 'https://example.com/page', 'moved'],
+        ['https://example.com/old', 'https://example.com/new', 'moved'],
+        ['https://example.com/old', 'https://example.com/', 'home'],
+        ['https://example.com/', 'https://www.example.com/', 'moved'],
+        ['https://example.com/private', 'https://example.com/login?next=/private', 'login'],
+        ['https://example.com/doc', 'https://accounts.example.com/signin', 'login']
+    ] // cases
+
+    for (const [from, to, kind] of cases) {
+        expect(dead_links.redirect_kind(from, to) === kind,
+            'Expected dead_links.redirect_kind("' + from + '", "' + to + '") to return "' + kind + '", got "' + dead_links.redirect_kind(from, to) + '".'
+        )
+    } // for
+} // test_dead_links_redirect_kind
+
+local.test.dead_links_classify = function test_dead_links_classify() {
+    /*
+    Only "not found" and "unreachable" count as dead, only "not found" is pre-selected for removal (a Wi-Fi drop must
+    not tick good favorites), and a real move carries the new address.
+    */
+
+    const url = 'https://example.com/page'
+
+    const cases = [
+        [{ url: url, status: 200, final_url: url, error: '' }, 'ok', false, ''],
+        [{ url: url, status: 200, final_url: 'https://example.com/new-page', error: '' }, 'moved', false, 'https://example.com/new-page'],
+        [{ url: url, status: 200, final_url: 'https://example.com/', error: '' }, 'redirect_home', false, ''],
+        [{ url: url, status: 200, final_url: 'https://example.com/login', error: '' }, 'redirect_login', false, ''],
+        [{ url: url, status: 404, final_url: url, error: '' }, 'not_found', true, ''],
+        [{ url: url, status: 410, final_url: url, error: '' }, 'not_found', true, ''],
+        [{ url: url, status: 403, final_url: url, error: '' }, 'unverified', false, ''],
+        [{ url: url, status: 429, final_url: url, error: '' }, 'unverified', false, ''],
+        [{ url: url, status: 503, final_url: url, error: '' }, 'server_error', false, ''],
+        [{ url: url, status: 0, final_url: '', error: 'network' }, 'unreachable', true, ''],
+        [{ url: url, status: 0, final_url: '', error: 'timeout' }, 'timeout', false, '']
+    ] // cases
+
+    for (const [outcome, result, dead, new_url] of cases) {
+        const got = dead_links.classify(outcome)
+        const label = 'status ' + outcome.status + (outcome.error ? ' / ' + outcome.error : '') + ' -> ' + outcome.final_url
+
+        expect(got.result === result, 'Expected dead_links.classify(' + label + ').result to be "' + result + '", got "' + got.result + '".')
+        expect(got.dead === dead, 'Expected dead_links.classify(' + label + ').dead to be ' + dead + '.')
+        expect(got.preselect === (result === 'not_found'), 'Expected dead_links.classify(' + label + ').preselect to be ' + (result === 'not_found') + '.')
+        expect(got.new_url === new_url, 'Expected dead_links.classify(' + label + ').new_url to be "' + new_url + '".')
+        expect(typeof dead_links.describe(got.result, outcome.status) === 'string', 'Expected dead_links.describe() to return a string.')
+    } // for
+} // test_dead_links_classify
+
+local.test.dead_links_queue = async function test_dead_links_queue() {
+    /*
+    The queue runs everything, never more than "concurrency" at once, and never two requests to the same host at once.
+    */
+
+    const items = []
+
+    for (let index = 0; index < 12; index++) {
+        items.push({ 'url': 'https://host' + (index % 3) + '.example/' + index })
+    } // for
+
+    let running = 0
+    let max_running = 0
+    const host_running = {}
+    let host_overlap = false
+    const seen = []
+
+    const queue = dead_links.queue(items, async function(item) {
+        const host = dead_links.host(item.url)
+
+        running++
+        max_running = Math.max(max_running, running)
+
+        if (host_running[host]) {
+            host_overlap = true
+        } // if
+
+        host_running[host] = true
+        await delay(5)
+        host_running[host] = false
+        running--
+
+        seen.push(item.url)
+    }, { 'concurrency': 2, 'host_gap_ms': 1 })
+
+    await queue.done
+
+    expect(seen.length === items.length, 'Expected dead_links.queue() to run all ' + items.length + ' items, ran ' + seen.length + '.')
+    expect(max_running <= 2, 'Expected dead_links.queue() to run at most 2 at once, saw ' + max_running + '.')
+    expect(host_overlap === false, 'Expected dead_links.queue() to never run two requests to the same host at once.')
+} // test_dead_links_queue

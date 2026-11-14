@@ -20,6 +20,10 @@
     "homepage_url": "https://github.com/vitorhmcorreia/sprucemarks-continued",
     "minimum_chrome_version": "102",
     "name": "Sprucemarks Continued",
+    "optional_host_permissions": [
+        "http://*/*",
+        "https://*/*"
+    ],
     "options_ui": {
         "open_in_tab": true,
         "page": "page/light/dark/options.html"

@@ -27,6 +27,12 @@ const browser = { // will hold various functions
         // onMoved
         // onRemoved
         // remove
+        // update
+    },
+    'permissions': { // used by the Dead Links page (optional host access)
+        // contains
+        // remove
+        // request
     },
     'runtime': {
         // connect
@@ -70,6 +76,14 @@ browser.bookmarks.onImportEnded       = chrome.bookmarks.onImportEnded
 browser.bookmarks.onMoved             = chrome.bookmarks.onMoved
 browser.bookmarks.onRemoved           = chrome.bookmarks.onRemoved
 browser.bookmarks.remove              = chrome.bookmarks.remove
+browser.bookmarks.update              = chrome.bookmarks.update
+
+// chrome.permissions only exists when the manifest declares optional permissions
+if (chrome.permissions) {
+    browser.permissions.contains = chrome.permissions.contains
+    browser.permissions.remove   = chrome.permissions.remove
+    browser.permissions.request  = chrome.permissions.request
+} // if
 
 browser.runtime.connect     = chrome.runtime.connect
 browser.runtime.getManifest = chrome.runtime.getManifest
@@ -839,6 +853,309 @@ const time_to_tick = shared.function.time_to_tick = function time_to_tick(event_
 
     return next_tick + 1 // plus 1 millisecond
 } // time_to_tick
+
+'use strict'
+
+/*
+    Dead-link checker: the parts that don't touch the page or the network, so the background test suite can test them.
+    Loaded by the Dead Links page (js/page/dead-links-tool.js does the checking and the display) and included in the
+    background service worker for the tests (local.test.dead_links_*). Design: docs/dead-link-checker.md.
+*/
+
+const dead_links = {
+    'setting': {
+        'concurrency'    : 6,     // requests in flight at once, overall
+        'host_gap_ms'    : 250,   // pause between two requests to the same host
+        'retry_delay_ms' : 10000, // wait before the second attempt on a network error
+        'timeout_ms'     : 15000  // give up on one request after this long
+    },
+    'storage_key': 'dead_links' // browser.storage.local key holding results, ignored favorites and the skip-local option
+} // dead_links
+
+dead_links.checkable = function dead_links_checkable(url) {
+    /*
+    Only http and https addresses can be checked.
+
+    @param   {String}   url  Bookmark URL.
+    @return  {Boolean}
+    */
+
+    try {
+        const protocol = new URL(url).protocol
+        return protocol === 'http:' || protocol === 'https:'
+    } catch (error) {
+        return false
+    } // try
+} // dead_links.checkable
+
+dead_links.is_local = function dead_links_is_local(url) {
+    /*
+    True for addresses that are usually only reachable on one network: localhost, loopback and private IP ranges,
+    .local/.lan/.internal/.home.arpa names, and single-label hostnames like http://wiki/.
+
+    @param   {String}   url  Bookmark URL.
+    @return  {Boolean}
+    */
+
+    let host = ''
+
+    try {
+        host = new URL(url).hostname.toLowerCase()
+    } catch (error) {
+        return false
+    } // try
+
+    host = host.replace(/^\[|\]$/g, '').replace(/\.$/, '') // IPv6 brackets, trailing dot
+
+    if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') {
+        return true
+    } // if
+
+    const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+
+    if (ipv4) {
+        const a = Number(ipv4[1])
+        const b = Number(ipv4[2])
+
+        return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)
+    } // if
+
+    if (host.includes(':')) {
+        // IPv6: unique local (fc00::/7) and link-local (fe80::/10)
+        return /^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host)
+    } // if
+
+    if (/\.(local|lan|internal|intranet|corp|home\.arpa)$/.test(host)) {
+        return true
+    } // if
+
+    return host.indexOf('.') < 0 // single label like "wiki" or "nas"
+} // dead_links.is_local
+
+dead_links.host = function dead_links_host(url) {
+    /*
+    @param   {String}  url
+    @return  {String}       Lowercase host with port, or '' if the URL can't be parsed.
+    */
+
+    try {
+        return new URL(url).host.toLowerCase()
+    } catch (error) {
+        return ''
+    } // try
+} // dead_links.host
+
+dead_links.same_address = function dead_links_same_address(a, b) {
+    /*
+    True when two URLs point to the same page, ignoring the #fragment and a trailing slash.
+
+    @param   {String}   a
+    @param   {String}   b
+    @return  {Boolean}
+    */
+
+    const normal = function(url) {
+        try {
+            const u = new URL(url)
+            u.hash = ''
+            return u.href.replace(/\/$/, '')
+        } catch (error) {
+            return url
+        } // try
+    } // normal
+
+    return normal(a) === normal(b)
+} // dead_links.same_address
+
+dead_links.redirect_kind = function dead_links_redirect_kind(original_url, final_url) {
+    /*
+    Describe where a redirect ended.
+
+    @param   {String}  original_url  The bookmark's URL.
+    @param   {String}  final_url     Where the redirects ended.
+    @return  {String}                'none' (same page), 'home' (the site's home page, usually means the page is gone),
+                                     'login' (a sign-in page), or 'moved' (a real new address).
+    */
+
+    if (!final_url || dead_links.same_address(original_url, final_url)) {
+        return 'none'
+    } // if
+
+    let original
+    let final
+
+    try {
+        original = new URL(original_url)
+        final = new URL(final_url)
+    } catch (error) {
+        return 'none'
+    } // try
+
+    const original_path = original.pathname.replace(/\/+$/, '')
+    const final_path = final.pathname.replace(/\/+$/, '')
+
+    if (/(^|\/)(log-?in|sign-?in|signon|auth|sso|account\/login)(\/|$|\.)/i.test(final.pathname)) {
+        return 'login'
+    } // if
+
+    if (final_path === '' && final.search === '' && original_path !== '') {
+        // a specific page now lands on a home page
+        return 'home'
+    } // if
+
+    return 'moved'
+} // dead_links.redirect_kind
+
+dead_links.classify = function dead_links_classify(outcome) {
+    /*
+    Turn the outcome of checking one URL into a result.
+
+    @param   {Object}  outcome  { url, status (Number, 0 if no response), final_url, error ('network', 'timeout' or '') }
+    @return  {Object}           { result, dead, preselect, new_url }
+                                result: 'ok', 'moved', 'redirect_home', 'redirect_login', 'not_found', 'unreachable',
+                                        'unverified' (401, 403, 429, other 4xx), 'server_error' (5xx), 'timeout'
+                                dead: true for 'not_found' and 'unreachable'
+                                preselect: true only for 'not_found', where a server answered that the page is gone.
+                                    'unreachable' is never pre-selected: a Wi-Fi drop makes every site look unreachable.
+                                new_url: the new address when result is 'moved', otherwise ''
+    */
+
+    const status = outcome.status || 0
+
+    if (outcome.error === 'timeout') {
+        return { 'result': 'timeout', 'dead': false, 'preselect': false, 'new_url': '' }
+    } // if
+
+    if (outcome.error === 'network' || status === 0) {
+        return { 'result': 'unreachable', 'dead': true, 'preselect': false, 'new_url': '' }
+    } // if
+
+    if (status === 404 || status === 410) {
+        return { 'result': 'not_found', 'dead': true, 'preselect': true, 'new_url': '' }
+    } // if
+
+    if (status >= 500) {
+        return { 'result': 'server_error', 'dead': false, 'preselect': false, 'new_url': '' }
+    } // if
+
+    if (status >= 400) {
+        return { 'result': 'unverified', 'dead': false, 'preselect': false, 'new_url': '' }
+    } // if
+
+    // 2xx (fetch follows redirects, so 3xx only shows up here if a redirect loop or limit stopped it)
+    if (status >= 300) {
+        return { 'result': 'unverified', 'dead': false, 'preselect': false, 'new_url': '' }
+    } // if
+
+    const kind = dead_links.redirect_kind(outcome.url, outcome.final_url)
+
+    if (kind === 'moved') {
+        return { 'result': 'moved', 'dead': false, 'preselect': false, 'new_url': outcome.final_url }
+    } else if (kind === 'home') {
+        return { 'result': 'redirect_home', 'dead': false, 'preselect': false, 'new_url': '' }
+    } else if (kind === 'login') {
+        return { 'result': 'redirect_login', 'dead': false, 'preselect': false, 'new_url': '' }
+    } // if
+
+    return { 'result': 'ok', 'dead': false, 'preselect': false, 'new_url': '' }
+} // dead_links.classify
+
+dead_links.describe = function dead_links_describe(result, status) {
+    /*
+    Human text for a result.
+
+    @param   {String}  result  Result from dead_links.classify().
+    @param   {Number}  status  HTTP status, if any.
+    @return  {String}
+    */
+
+    switch (result) {
+        case 'not_found'     : return 'Not found' + (status ? ' (' + status + ')' : '')
+        case 'unreachable'   : return 'Unreachable: the site did not respond'
+        case 'moved'         : return 'Moved to a new address'
+        case 'redirect_home' : return "Redirects to the site's home page"
+        case 'redirect_login': return 'Redirects to a sign-in page'
+        case 'unverified'    : return "Couldn't verify" + (status ? ' (' + status + ')' : '')
+        case 'server_error'  : return 'Server error' + (status ? ' (' + status + ')' : '')
+        case 'timeout'       : return 'Timed out'
+        case 'skipped_local' : return 'Not checked: local address'
+        default              : return 'OK'
+    } // switch
+} // dead_links.describe
+
+dead_links.queue = function dead_links_queue(items, worker, settings) {
+    /*
+    Run worker(item) for every item, with at most settings.concurrency at once, one at a time per host, and
+    settings.host_gap_ms between two requests to the same host.
+
+    @param   {Array}     items     Objects with a "url" property.
+    @param   {Function}  worker    async function(item), its return value is ignored.
+    @param   {Object}    settings  { concurrency, host_gap_ms }.
+    @return  {Object}              { done: Promise that resolves when everything finished, stop: function }
+    */
+
+    const waiting = items.slice()
+    const busy_hosts = {}  // host: true while a request to it is in flight
+    const host_ready = {}  // host: time (ms) when the next request to it may start
+    let running = 0
+    let stopped = false
+
+    let finish
+    const done = new Promise(function(resolve) { finish = resolve })
+
+    const pump = function() {
+        if (stopped || (waiting.length === 0 && running === 0)) {
+            if (running === 0) finish()
+            return
+        } // if
+
+        const now = Date.now()
+        let next_wake = Infinity
+
+        for (let index = 0; index < waiting.length && running < settings.concurrency; index++) {
+            const item = waiting[index]
+            const host = dead_links.host(item.url)
+
+            if (busy_hosts[host]) {
+                continue
+            } // if
+
+            if ((host_ready[host] || 0) > now) {
+                next_wake = Math.min(next_wake, host_ready[host])
+                continue
+            } // if
+
+            waiting.splice(index, 1)
+            index--
+
+            running++
+            busy_hosts[host] = true
+
+            Promise.resolve().then(function() { return worker(item) }).catch(function() {}).then(function() {
+                running--
+                busy_hosts[host] = false
+                host_ready[host] = Date.now() + settings.host_gap_ms
+                pump()
+            })
+        } // for
+
+        if (next_wake !== Infinity && running < settings.concurrency) {
+            setTimeout(pump, Math.max(0, next_wake - Date.now()))
+        } // if
+    } // pump
+
+    pump()
+
+    return {
+        'done': done,
+        'stop': function() {
+            stopped = true
+            waiting.length = 0
+            if (running === 0) finish()
+        }
+    }
+} // dead_links.queue
+
 
 'use strict' // not technically needed since this file will be included in another file that will specify 'use strict' first
 
@@ -5691,3 +6008,155 @@ local.test.shared_url = function test_shared_url() {
         'Expected shared.url.extension to end with a "/" character.'
     )
 } // test_shared_url
+//------------
+// Dead Links
+//------------
+local.test.dead_links_checkable = function test_dead_links_checkable() {
+    /*
+    Only http and https favorites can be checked.
+    */
+
+    const cases = {
+        'https://example.com/'       : true,
+        'http://example.com/page'    : true,
+        'javascript:alert(1)'        : false,
+        'file:///home/user/notes.txt': false,
+        'edge://settings'            : false,
+        'not a url'                  : false
+    } // cases
+
+    for (const url in cases) {
+        expect(dead_links.checkable(url) === cases[url],
+            'Expected dead_links.checkable("' + url + '") to return ' + cases[url] + '.'
+        )
+    } // for
+} // test_dead_links_checkable
+
+local.test.dead_links_is_local = function test_dead_links_is_local() {
+    /*
+    Local and intranet addresses are recognised; public ones are not.
+    */
+
+    const cases = {
+        'http://localhost:8080/'        : true,
+        'http://127.0.0.1/'             : true,
+        'http://10.1.2.3/'              : true,
+        'http://172.16.0.1/'            : true,
+        'http://172.32.0.1/'            : false,
+        'http://192.168.1.26/'          : true,
+        'http://[::1]/'                 : true,
+        'http://[fd12:3456::1]/'        : true,
+        'http://nas.local/'             : true,
+        'http://router.lan/'            : true,
+        'http://printer.home.arpa/'     : true,
+        'http://wiki/'                  : true,
+        'https://example.com/'          : false,
+        'https://8.8.8.8/'              : false,
+        'https://en.wikipedia.org/wiki/': false
+    } // cases
+
+    for (const url in cases) {
+        expect(dead_links.is_local(url) === cases[url],
+            'Expected dead_links.is_local("' + url + '") to return ' + cases[url] + '.'
+        )
+    } // for
+} // test_dead_links_is_local
+
+local.test.dead_links_redirect_kind = function test_dead_links_redirect_kind() {
+    /*
+    Redirects are told apart: same page, real move, home page, sign-in page.
+    */
+
+    const cases = [
+        ['https://example.com/page', 'https://example.com/page/', 'none'],
+        ['https://example.com/page', 'https://example.com/page#top', 'none'],
+        ['http://example.com/page', 'https://example.com/page', 'moved'],
+        ['https://example.com/old', 'https://example.com/new', 'moved'],
+        ['https://example.com/old', 'https://example.com/', 'home'],
+        ['https://example.com/', 'https://www.example.com/', 'moved'],
+        ['https://example.com/private', 'https://example.com/login?next=/private', 'login'],
+        ['https://example.com/doc', 'https://accounts.example.com/signin', 'login']
+    ] // cases
+
+    for (const [from, to, kind] of cases) {
+        expect(dead_links.redirect_kind(from, to) === kind,
+            'Expected dead_links.redirect_kind("' + from + '", "' + to + '") to return "' + kind + '", got "' + dead_links.redirect_kind(from, to) + '".'
+        )
+    } // for
+} // test_dead_links_redirect_kind
+
+local.test.dead_links_classify = function test_dead_links_classify() {
+    /*
+    Only "not found" and "unreachable" count as dead, only "not found" is pre-selected for removal (a Wi-Fi drop must
+    not tick good favorites), and a real move carries the new address.
+    */
+
+    const url = 'https://example.com/page'
+
+    const cases = [
+        [{ url: url, status: 200, final_url: url, error: '' }, 'ok', false, ''],
+        [{ url: url, status: 200, final_url: 'https://example.com/new-page', error: '' }, 'moved', false, 'https://example.com/new-page'],
+        [{ url: url, status: 200, final_url: 'https://example.com/', error: '' }, 'redirect_home', false, ''],
+        [{ url: url, status: 200, final_url: 'https://example.com/login', error: '' }, 'redirect_login', false, ''],
+        [{ url: url, status: 404, final_url: url, error: '' }, 'not_found', true, ''],
+        [{ url: url, status: 410, final_url: url, error: '' }, 'not_found', true, ''],
+        [{ url: url, status: 403, final_url: url, error: '' }, 'unverified', false, ''],
+        [{ url: url, status: 429, final_url: url, error: '' }, 'unverified', false, ''],
+        [{ url: url, status: 503, final_url: url, error: '' }, 'server_error', false, ''],
+        [{ url: url, status: 0, final_url: '', error: 'network' }, 'unreachable', true, ''],
+        [{ url: url, status: 0, final_url: '', error: 'timeout' }, 'timeout', false, '']
+    ] // cases
+
+    for (const [outcome, result, dead, new_url] of cases) {
+        const got = dead_links.classify(outcome)
+        const label = 'status ' + outcome.status + (outcome.error ? ' / ' + outcome.error : '') + ' -> ' + outcome.final_url
+
+        expect(got.result === result, 'Expected dead_links.classify(' + label + ').result to be "' + result + '", got "' + got.result + '".')
+        expect(got.dead === dead, 'Expected dead_links.classify(' + label + ').dead to be ' + dead + '.')
+        expect(got.preselect === (result === 'not_found'), 'Expected dead_links.classify(' + label + ').preselect to be ' + (result === 'not_found') + '.')
+        expect(got.new_url === new_url, 'Expected dead_links.classify(' + label + ').new_url to be "' + new_url + '".')
+        expect(typeof dead_links.describe(got.result, outcome.status) === 'string', 'Expected dead_links.describe() to return a string.')
+    } // for
+} // test_dead_links_classify
+
+local.test.dead_links_queue = async function test_dead_links_queue() {
+    /*
+    The queue runs everything, never more than "concurrency" at once, and never two requests to the same host at once.
+    */
+
+    const items = []
+
+    for (let index = 0; index < 12; index++) {
+        items.push({ 'url': 'https://host' + (index % 3) + '.example/' + index })
+    } // for
+
+    let running = 0
+    let max_running = 0
+    const host_running = {}
+    let host_overlap = false
+    const seen = []
+
+    const queue = dead_links.queue(items, async function(item) {
+        const host = dead_links.host(item.url)
+
+        running++
+        max_running = Math.max(max_running, running)
+
+        if (host_running[host]) {
+            host_overlap = true
+        } // if
+
+        host_running[host] = true
+        await delay(5)
+        host_running[host] = false
+        running--
+
+        seen.push(item.url)
+    }, { 'concurrency': 2, 'host_gap_ms': 1 })
+
+    await queue.done
+
+    expect(seen.length === items.length, 'Expected dead_links.queue() to run all ' + items.length + ' items, ran ' + seen.length + '.')
+    expect(max_running <= 2, 'Expected dead_links.queue() to run at most 2 at once, saw ' + max_running + '.')
+    expect(host_overlap === false, 'Expected dead_links.queue() to never run two requests to the same host at once.')
+} // test_dead_links_queue

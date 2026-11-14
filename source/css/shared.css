@@ -709,6 +709,58 @@ label + .option-sort {
     padding: 2px 0;
 }
 
+#tool-dead-links .grid {
+    grid-template-columns: 1fr 0.8fr 1.3fr 1fr 70px;
+}
+
+#tool-dead-links .tool-control {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+}
+
+#tool-dead-links .tool-control div {
+    margin-top: 32px;
+    padding-left: 24px;
+    text-align: right;
+}
+
+#tool-dead-links .tool-control input + input {
+    margin-left: 8px;
+}
+
+#tool-dead-links .tool-control a {
+    display: inline-block;
+    margin-right: 16px;
+    padding: 2px 0;
+}
+
+#tool-dead-links .dead-links-option {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    margin: 24px 0 0;
+}
+
+#tool-dead-links .dead-links-status {
+    margin: 24px 0 0;
+}
+
+#tool-dead-links .new-url,
+#tool-dead-links .result-actions {
+    font-size: 14px;
+    margin-top: 6px;
+}
+
+#tool-dead-links .result-actions a + a {
+    margin-left: 12px;
+}
+
+.grid-col-span-5 {
+    grid-column: span 5;
+}
+
 #tool-empty-folders .grid {
     grid-template-columns: 1fr 1.55fr 70px;
 }
