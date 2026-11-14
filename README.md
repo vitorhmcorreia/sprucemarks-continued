@@ -20,7 +20,7 @@ the original author.
 
 ### From the Microsoft Edge Add-ons store
 
-Coming soon: the listing is being submitted. Store installs update automatically.
+In review (submitted November 14, 2026). The link will appear here once it is published. Store installs update automatically.
 
 ### Manually, in Chrome, Edge, Brave, Opera or Vivaldi
 
