@@ -26,6 +26,7 @@ const local = {
     ],
     'element': {
         'about_browser'    : document.getElementById('about-browser'),
+        'about_build'      : document.getElementById('about-build'),
         'about_version'    : document.getElementById('about-version'),
         'content'          : document.getElementById('content'),
         'html'             : document.getElementById('html'),
@@ -33,6 +34,7 @@ const local = {
         'scroll_nav'       : document.getElementById('scroll-nav'),
         'trouble_ancestors': document.getElementById('trouble-ancestors'),
         'trouble_browser'  : document.getElementById('trouble-browser'),
+        'trouble_build'    : document.getElementById('trouble-build'),
         'trouble_copy'     : document.getElementById('trouble-copy'),
         'trouble_copy_busy': document.getElementById('trouble-copy-busy'),
         'trouble_hashes'   : document.getElementById('trouble-hashes'),
@@ -77,6 +79,7 @@ const local = {
     'setting': { // will hold values from background.js
         // show_message
     },
+    'build': null, // contents of /build-info.json, if this build has one (D20)
     'timing': [], // recent timings from background.js, summarized in Troubleshooting (D18)
     'version': null // will hold a value from background.js
 } // local
@@ -84,6 +87,63 @@ const local = {
 //-----------
 // Functions
 //-----------
+const build_text = local.function.build_text = function build_text() {
+    /*
+    Describe the build: which git commit and branch it came from (D20).
+
+    @return  {String}
+    */
+
+    const build = local.build
+
+    if (!build || !build.short) {
+        return 'unknown (no build-info.json: run "node build.js", or enable the git hooks with "git config core.hooksPath .githooks")'
+    } // if
+
+    let text = build.short + ' on ' + build.branch
+
+    if (build.date) {
+        text += ', committed ' + build.date.slice(0, 16).replace('T', ' ') + ' UTC'
+    } // if
+
+    if (build.dirty) {
+        text += ', with uncommitted changes'
+    } // if
+
+    return text
+} // build_text
+
+const display_build = local.function.display_build = async function display_build() {
+    /*
+    Read /build-info.json (written by build.js or the git hooks, not in git) and show it in About and Troubleshooting.
+    */
+
+    try {
+        const response = await fetch('/build-info.json', { 'cache': 'no-store' })
+
+        if (response.ok) {
+            local.build = await response.json()
+        } // if
+    } catch (error) {
+        // no build information in this build
+    } // try
+
+    const text = build_text()
+    local.element.about_build.textContent = text
+    local.element.trouble_build.textContent = text
+
+    if (local.build && local.build.commit) {
+        // link the commit on GitHub
+        const link = document.createElement('a')
+        link.href = 'https://github.com/vitorhmcorreia/sprucemarks-continued/commit/' + encodeURIComponent(local.build.commit)
+        link.rel = 'noopener noreferrer'
+        link.target = '_blank'
+        link.textContent = local.build.short
+        local.element.about_build.textContent = text.slice(local.build.short.length)
+        local.element.about_build.prepend(link)
+    } // if
+} // display_build
+
 const display_browser_type = local.function.display_browser_type = function display_browser_type() {
     /*
     Display the current browser type.
@@ -179,6 +239,9 @@ const listen_trouble_copy = local.function.listen_trouble_copy = function listen
 
         trouble_text += 'Sprucemarks Continued Version' + '\n'
         trouble_text += local.version + '\n\n'
+
+        trouble_text += 'Build' + '\n'
+        trouble_text += build_text() + (local.build && local.build.commit ? ' (' + local.build.commit + ')' : '') + '\n\n'
 
         trouble_text += 'Web Browser Version' + '\n'
         trouble_text += navigator.userAgent + '\n\n'
@@ -392,6 +455,9 @@ const start_continue = local.function.start_continue = function start_continue()
 
     // display the current browser type
     display_browser_type()
+
+    // display which commit this build came from
+    display_build()
 
     //------------------------------------
     // Update the Troubleshooting section

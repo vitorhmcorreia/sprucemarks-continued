@@ -16,6 +16,8 @@ Usage: node build.js                 build into deploy/
        node build.js --zip           also zip the output into dist/sprucemarks-continued-<version>.zip (store upload)
        node build.js --no-tests      release build: leaves the background test suite out and turns debug logging off
                                      (shared.setting.log); builds into dist/package/ so deploy/ keeps the full build
+
+Every build also writes build-info.json (commit, branch, date, uncommitted changes) for the About page (D20).
 */
 
 const fs = require('fs')
@@ -81,6 +83,26 @@ function build(dir) {
 
 fs.rmSync(OUT, { recursive: true, force: true })
 build(SOURCE)
+// build-info.json: which commit this build came from, shown on the About page (D20). Git-ignored in deploy/ (a commit
+// can't contain its own ID), included in store zips. Skipped quietly when git isn't available.
+try {
+    const git = (...args) => execFileSync('git', args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+    const info = {
+        'commit': git('rev-parse', 'HEAD'),
+        'short' : git('rev-parse', '--short', 'HEAD'),
+        'branch': git('rev-parse', '--abbrev-ref', 'HEAD'),
+        'date'  : git('log', '-1', '--format=%cI', 'HEAD'),
+        'dirty' : git('status', '--porcelain', '--untracked-files=no') !== '',
+        'source': 'build.js'
+    }
+    if (info.branch === 'HEAD' && process.env.GITHUB_REF_NAME) {
+        info.branch = process.env.GITHUB_REF_NAME // CI checks out a tag or a pull request without a branch
+    } // if
+    fs.writeFileSync(path.join(OUT, 'build-info.json'), JSON.stringify(info, null, 4) + '\n')
+} catch (error) {
+    // not a git checkout
+}
+
 const version = JSON.parse(fs.readFileSync(path.join(OUT, 'manifest.json'), 'utf8')).version
 console.log(`built ${path.relative(ROOT, OUT) || OUT} (version ${version}${NO_TESTS ? ', release: no tests, logging off' : ''})`)
 
