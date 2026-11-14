@@ -486,13 +486,18 @@
                     </p>
 
                     <p>
-                        <strong>Sprucemarks Version</strong><br>
+                        <strong>Sprucemarks Continued Version</strong><br>
                         <span id="trouble-version">1.0</span>
                     </p>
 
                     <p>
                         <strong>Web Browser Version</strong><br>
                         <span id="trouble-browser">Unknown</span>
+                    </p>
+
+                    <p>
+                        <strong>Timing</strong> (how long recent work took, slowest first; times in milliseconds)<br>
+                        <span id="trouble-timing" class="trouble-timing">Unknown</span>
                     </p>
 
                     <hr>

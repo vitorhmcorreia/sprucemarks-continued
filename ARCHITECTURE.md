@@ -63,6 +63,14 @@ so they stay in step, and re-sorts. The toolbar icon focuses an open page or ope
 picks in Preferences (`icon_set`). Change the art in `art/`, run `node art/make-icons.js`, then `node build.js`.
 
 **Tools.** Duplicate, similar and empty-folder finders, and an optional bookmark history log kept in local storage.
+The service worker recomputes all three finders over the whole tree when Tools opens and after bookmark changes.
+"Find similar" buckets addresses by site + path, then by user name, password and port class, in one pass (D19); it used
+to compare every pair and was the slow part on large collections.
+
+**Timing log (D18).** `timing(name, start, detail)` in `shared.js` records how long a step took. The service worker
+times the Tools scans (`timing_tools_scan`) and full sorts, receives timings from the Tools page over the port
+(`subject: 'timing'`), keeps the newest 200 in `browser.storage.local` (`timing_log`), and sends them to the About
+page, which summarizes them in Troubleshooting and in Copy Information.
 
 **One-time messages.** `local.setting.show_message.<name>` flags (set at install or upgrade) show the matching
 `show-message-<name>` box from `page/include/-show-message.html.jss` until dismissed. The upgrade message is the fork

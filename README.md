@@ -83,6 +83,9 @@ How the code fits together: [ARCHITECTURE.md](ARCHITECTURE.md). Why the fork is 
 Use the `log` setting inside `source/js/shared.js` to enable or disable console logs for various events and operations
 (release builds turn it off automatically).
 
+When something feels slow, open **About → Troubleshooting → Timing**: it lists how long recent Tools scans, drawing and
+sorting took (slowest first). **Copy Information** includes it, for a bug report.
+
 ## Test
 
 Run the test suite in a headless browser (Edge or Chromium; set `BROWSER=` to pick one):

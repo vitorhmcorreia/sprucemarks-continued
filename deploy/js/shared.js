@@ -54,10 +54,14 @@ const shared = {
 
         // time_remove_precision
         // time_to_tick
+
+        // timing
+        // timing_summary
     },
     'setting': { // settings used internally, not customizable by the user
         'log': true // verbose logging for development, make sure this is false when publishing for end users
     },
+    'timing': [], // recent timings in this context, newest last: { name, ms, detail, when }, see timing()
     'timer': { // setTimeout references
         'theme_monitor': '' // will become a setTimeout call to run theme_monitor() every 10 seconds
     },
@@ -628,6 +632,72 @@ const theme_monitor = shared.function.theme_monitor = function theme_monitor() {
 
     shared.timer.theme_monitor = setTimeout(theme_monitor, 10000) // 10 seconds
 } // theme_monitor
+
+const timing = shared.function.timing = function timing(name, started, detail) {
+    /*
+    Record how long something took (D18). Keeps the newest 200 timings in shared.timing; the background service worker
+    saves them and the About page summarizes them in Troubleshooting.
+
+    @param   {String}  name      Short name like "tools: find duplicates".
+    @param   {Number}  started   performance.now() taken when the work began.
+    @param   {*}       [detail]  Optional context such as a bookmark count.
+    @return  {Object}            The entry: { name, ms, detail, when }.
+    */
+
+    const entry = {
+        'name'  : name,
+        'ms'    : Math.round(performance.now() - started),
+        'detail': (detail === undefined) ? '' : String(detail),
+        'when'  : Date.now()
+    } // entry
+
+    shared.timing.push(entry)
+
+    if (shared.timing.length > 200) {
+        shared.timing.splice(0, shared.timing.length - 200)
+    } // if
+
+    log('timing -> ' + name + ' ' + entry.ms + ' ms' + (entry.detail ? ' (' + entry.detail + ')' : ''))
+
+    return entry
+} // timing
+
+const timing_summary = shared.function.timing_summary = function timing_summary(entries) {
+    /*
+    Summarize timings per name, slowest first.
+
+    @param   {Object}  entries  Array of timing entries.
+    @return  {Object}           Array of { name, runs, average, slowest, last_ms, last_when, detail } sorted by slowest.
+    */
+
+    const by_name = {}
+
+    for (const entry of entries || []) {
+        const item = by_name[entry.name] || (by_name[entry.name] = { 'name': entry.name, 'runs': 0, 'total': 0, 'slowest': 0, 'last_ms': 0, 'last_when': 0, 'detail': '' })
+
+        item.runs += 1
+        item.total += entry.ms
+        item.slowest = Math.max(item.slowest, entry.ms)
+
+        if (entry.when >= item.last_when) {
+            item.last_ms = entry.ms
+            item.last_when = entry.when
+            item.detail = entry.detail
+        } // if
+    } // for
+
+    return Object.values(by_name).map(function(item) {
+        return {
+            'name'     : item.name,
+            'runs'     : item.runs,
+            'average'  : Math.round(item.total / item.runs),
+            'slowest'  : item.slowest,
+            'last_ms'  : item.last_ms,
+            'last_when': item.last_when,
+            'detail'   : item.detail
+        }
+    }).sort((a, b) => b.slowest - a.slowest)
+} // timing_summary
 
 const time_remove_precision = shared.function.time_remove_precision = function time_remove_precision(time) {
     /*
