@@ -95,3 +95,17 @@ The favorites in the screenshots are made-up samples of public websites (see `ma
 ```
 Sprucemarks Continued is a community fork of the open-source Sprucemarks extension (CC0, archived by its author in 2026); this fork is not affiliated with the original author. No account or test credentials are needed. To test: open the extension from the toolbar icon, enable "Automatic Sorting" and a sort option (for example Favorites Bar: A–Z), then add or rename favorites and they are re-sorted within a second or two. The Tools page finds empty folders, duplicate favorites and similar favorites. The extension makes no network requests and uses only the "bookmarks" and "storage" permissions. Source: https://github.com/vitorhmcorreia/sprucemarks-continued
 ```
+
+## Updates
+
+Each update: upload the zip from the GitHub release (or `node build.js --no-tests --zip`), replace changed
+screenshots, and paste the notes below into "Notes for certification".
+
+### 2026.11.14.1
+
+Screenshots: replace `6-about-dark.png` (changelog and store link); the others are unchanged since the first
+submission except `1-options.png` and `5-preferences-dark.png`, which now show the green page logo.
+
+```
+Update with no new permissions (still only "bookmarks" and "storage"). Changes: the Tools page finds similar favorites about 15 times faster on large collections; the About page shows a timing summary and which build is running; a green page logo matching the icon; developer console logging is off; links to this listing. No network requests, no data collected. Source and change history: https://github.com/vitorhmcorreia/sprucemarks-continued
+```
