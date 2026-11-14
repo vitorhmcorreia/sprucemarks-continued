@@ -146,3 +146,20 @@ The browser is Chrome for Testing, installed with `@puppeteer/browsers`, because
 Considered: CI without the browser tests (cheaper, but the only real tests are the in-browser ones); Playwright
 (a large dependency for one script; the DevTools protocol over Node's built-in WebSocket is enough); keeping releases
 manual with `gh release create` (works, but the zip then comes from whoever's machine, and steps get skipped).
+
+## D18. A timing log, kept locally and shown in Troubleshooting (2026-11-14)
+
+The user's 5,252 favorites sometimes make the Tools page struggle, not always. The original only had a verbose
+development log (every event printed to the console, off in store builds, D14), which says nothing about where time
+goes. So the extension now records how long each step takes: reading the tree and each Tools finder (on open and on
+every refresh, with how many favorite changes came in since the last refresh), drawing each Tools section, and full
+sorts. The newest 200 timings are saved in local storage (they survive the service worker stopping) and summarized on
+the About page, per step: runs, average, slowest, last, with Copy Information including it for bug reports.
+
+Measured first with 5,252 generated favorites (`test/browser.js` takes any collection): Tools opens in about 0.25 s,
+a refresh takes about 0.1 s, a full sort up to 2.6 s. That did not reproduce the slowness, so the fix waits for timings
+from the real collection rather than guessing.
+
+Considered: the existing verbose log (too noisy to read, and off for users); the browser's DevTools performance
+profiler (precise, but only if it is recording at the moment it happens, and "sometimes" means it usually isn't);
+sending timings anywhere (no: nothing leaves the browser, PRIVACY.md).

@@ -64,6 +64,11 @@ picks in Preferences (`icon_set`). Change the art in `art/`, run `node art/make-
 
 **Tools.** Duplicate, similar and empty-folder finders, and an optional bookmark history log kept in local storage.
 
+**Timing log (D18).** `timing(name, start, detail)` in `shared.js` records how long a step took. The service worker
+times the Tools scans (`timing_tools_scan`) and full sorts, receives timings from the Tools page over the port
+(`subject: 'timing'`), keeps the newest 200 in `browser.storage.local` (`timing_log`), and sends them to the About
+page, which summarizes them in Troubleshooting and in Copy Information.
+
 **One-time messages.** `local.setting.show_message.<name>` flags (set at install or upgrade) show the matching
 `show-message-<name>` box from `page/include/-show-message.html.jss` until dismissed. The upgrade message is the fork
 notice for people moving from the archived original (D6).
