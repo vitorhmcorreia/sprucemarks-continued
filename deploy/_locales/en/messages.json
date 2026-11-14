@@ -1,10 +1,10 @@
 {
     "extensionDescription": {
-        "message": "Automatically sort bookmarks by title, date, or URL.",
+        "message": "Automatically sort bookmarks by title, date, or URL. A community fork that keeps Sprucemarks alive.",
         "description": "Summary of what this extension does."
     },
     "extensionName": {
-        "message": "Sprucemarks",
+        "message": "Sprucemarks Continued",
         "description": "The name of this extension."
     }
 }

@@ -13,7 +13,7 @@
     <div class="wrapper">
         <header>
             <js>include('/images/-logo.svg')</js>
-            <h1>Sprucemarks</h1>
+            <h1>Sprucemarks Continued</h1>
         </header>
 
         <nav>
@@ -56,14 +56,45 @@
             <div class="box">
                 <div class="box-inner">
                     <p>
-                        You are running Sprucemarks version
+                        You are running Sprucemarks Continued version
                         <strong id="about-version">1.0</strong>
                         <span id="about-browser"></span>
                     </p>
                 </div><!-- box-inner -->
             </div><!-- box -->
 
+            <h2>About This Fork</h2>
+
+            <div class="box">
+                <div class="box-inner">
+                    <p>
+                        Sprucemarks Continued is a community fork of Sprucemarks, created by Kai Nightmode and dedicated to the public domain under <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="noopener noreferrer" target="_blank">CC0 1.0</a> when the original was archived in August 2026. The goal is simply to keep it alive. This fork is not affiliated with or endorsed by the original author.
+                    </p>
+
+                    <p>
+                        Sprucemarks Continued does not collect, transmit, or sell any data. Your <span class="only-non-edge">bookmarks</span><span class="only-edge">favorites</span> and options never leave your browser. Source code and issues are on <a href="https://github.com/vitorhmcorreia/sprucemarks" rel="noopener noreferrer" target="_blank">GitHub</a>.
+                    </p>
+                </div><!-- box-inner -->
+            </div><!-- box -->
+
             <h2>Change Log</h2>
+
+            <div class="box">
+                <div class="box-inner">
+                    <h3>November 14, 2026</h3>
+
+                    <ul>
+                        <li>
+                            First release of Sprucemarks Continued, a community fork of the archived Sprucemarks.
+                        </li>
+                        <li>
+                            Updated name, about page, and messages to identify the fork.
+                        </li>
+                    </ul>
+                </div><!-- box-inner -->
+            </div><!-- box -->
+
+            <h3>Before the fork</h3>
 
             <div class="box">
                 <div class="box-inner">

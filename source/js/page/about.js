@@ -147,7 +147,7 @@ const listen_trouble_copy = local.function.listen_trouble_copy = function listen
         trouble_text += 'Options' + '\n'
         trouble_text += stringify(local.option) + '\n\n'
 
-        trouble_text += 'Sprucemarks Version' + '\n'
+        trouble_text += 'Sprucemarks Continued Version' + '\n'
         trouble_text += local.version + '\n\n'
 
         trouble_text += 'Web Browser Version' + '\n'

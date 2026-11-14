@@ -13,7 +13,7 @@
     <div class="wrapper">
         <header>
             <js>include('/images/-logo.svg')</js>
-            <h1>Sprucemarks</h1>
+            <h1>Sprucemarks Continued</h1>
         </header>
 
         <nav>

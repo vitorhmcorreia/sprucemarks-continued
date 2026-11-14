@@ -13,7 +13,7 @@
     <div id="wrapper" class="wrapper wide">
         <header>
             <js>include('/images/-logo.svg')</js>
-            <h1>Sprucemarks</h1>
+            <h1>Sprucemarks Continued</h1>
         </header>
 
         <nav>
@@ -369,7 +369,7 @@
 
                             <div class="tool-control">
                                 <p class="no-margin-top">
-                                    Sprucemarks must be running when <span class="only-edge">favorites</span> <span class="only-non-edge">bookmarks</span> are added, modified, or removed in order to capture that activity.
+                                    Sprucemarks Continued must be running when <span class="only-edge">favorites</span> <span class="only-non-edge">bookmarks</span> are added, modified, or removed in order to capture that activity.
                                 </p>
 
                                 <div>
