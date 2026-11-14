@@ -1,7 +1,7 @@
 # Design: dead-link checker
 
 Status: **merged** into `main` (pull request #1, 2026-11-14) after a try-out on a real 4,288-favorite collection; ships
-in 2026.11.15.0 (release pull request #7, store submission after 2026.11.14.1 is published). DECISIONS D8, D16, D17,
+in 2026.11.14.2 (released 2026-11-14; first numbered 2026.11.15.0 by mistake, re-released under the release date before reaching the store). DECISIONS D8, D16, D17,
 D21. Code: `source/js/dead-links.js` (pure logic, tested), `source/js/page/dead-links-tool.js`
 (checking and display), `source/js/page/dead-links.js` (page start-up), `source/page/-dead-links.html.jss`.
 

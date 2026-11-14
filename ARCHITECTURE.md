@@ -110,7 +110,9 @@ notice for people moving from the archived original (D6).
   `sh test/hooks-install.sh` (the git hook installer).
 - To release:
   1. bump `version` in `source/manifest.json` (and `check_version` in `install_or_upgrade` only if upgraders should
-     see a new one-time message), add a changelog entry to `source/page/-about.html.jss`;
+     see a new one-time message), add a changelog entry to `source/page/-about.html.jss`. The version is the date the
+     tag is pushed, `YYYY.M.D.N` with N counting releases that day (as the original did: 2026.8.28.0); if a prepared
+     release is tagged on another day, change the version and the changelog date first;
   2. `node build.js`, load `deploy/` unpacked and look it over, commit and push, wait for CI to pass;
   3. `git tag -a v<version> -m "<release notes>"` and `git push origin v<version>`: the Release workflow checks the
      version, runs the tests, builds the zip and publishes the GitHub Release (D12, D15);
