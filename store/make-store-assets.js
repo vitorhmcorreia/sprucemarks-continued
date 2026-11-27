@@ -12,7 +12,13 @@ Screenshots come from the built extension in deploy/ (run "node build.js" first)
 Edge/Chromium profile seeded with made-up sample favorites (test/browser.js), driven over the DevTools protocol.
 Needs Node 22+ (built-in WebSocket) and a browser that honours --load-extension (set BROWSER to pick one).
 
-Usage: node store/make-store-assets.js
+Usage: node store/make-store-assets.js            Edge Add-ons images, in store/
+       node store/make-store-assets.js chrome     Chrome Web Store images, in store/chrome/: the same screenshots
+           taken in Chrome (its "Bookmarks bar" wording and folder pictures), tiles saying "bookmarks", and the
+           128x128 store icon (96x96 artwork, 16px transparent padding). Needs BROWSER set to Chrome for Testing
+           (branded Chrome ignores --load-extension), for example:
+           npx @puppeteer/browsers install chrome@stable --path "$HOME/.cache/chrome-for-testing"
+           (if that chrome segfaults, its unpacking was truncated: unzip the downloaded zip by hand, D22)
 */
 
 const fs = require('fs')
@@ -22,7 +28,9 @@ const { sleep, connect, launch } = require('../test/browser') // browser driving
 
 const ROOT = path.join(__dirname, '..')
 const DEPLOY = path.join(ROOT, 'deploy')
-const OUT = __dirname
+const CHROME = process.argv[2] === 'chrome'
+const OUT = CHROME ? path.join(__dirname, 'chrome') : __dirname
+const ITEMS = CHROME ? 'bookmarks' : 'favorites' // what each browser calls them
 
 //-------------
 // Screenshots
@@ -78,7 +86,7 @@ h1 { font-family: 'National Park'; font-weight: normal; font-size: ${titleSize}p
 p { font-family: 'Inter'; font-size: ${tagSize}px; margin: ${Math.round(tagSize * 0.6)}px 0 0; color: #4a5a4d; }
 </style></head><body>
 ${logoSvg(iconSize)}
-<div><h1>Sprucemarks<br>Continued</h1><p>Automatically sort your favorites</p></div>
+<div><h1>Sprucemarks<br>Continued</h1><p>Automatically sort your ${ITEMS}</p></div>
 </body></html>`
 }
 
@@ -100,6 +108,7 @@ function logoSvg(size) {
 //--------
 async function main() {
     if (!fs.existsSync(path.join(DEPLOY, 'manifest.json'))) throw new Error('deploy/ is missing: run "node build.js" first')
+    if (CHROME && !/chrome/i.test(process.env.BROWSER || '')) throw new Error('set BROWSER to Chrome for Testing (see Usage)')
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sprucemarks-store-'))
     fs.mkdirSync(path.join(OUT, 'screenshots'), { recursive: true })
     const browser = await launch(DEPLOY, 9333)
@@ -143,8 +152,13 @@ async function main() {
             await capture(path.join(OUT, 'screenshots', shot.name + '.png'), 1280, 800)
         }
 
-        await openHtml(`<!doctype html><html><body style="margin:0;background:transparent">${logoSvg(300)}</body></html>`)
-        await capture(path.join(OUT, 'logo-300.png'), 300, 300, true)
+        if (CHROME) {
+            await openHtml(`<!doctype html><html><body style="margin:0;padding:16px;background:transparent">${logoSvg(96)}</body></html>`)
+            await capture(path.join(OUT, 'icon-128.png'), 128, 128, true)
+        } else {
+            await openHtml(`<!doctype html><html><body style="margin:0;background:transparent">${logoSvg(300)}</body></html>`)
+            await capture(path.join(OUT, 'logo-300.png'), 300, 300, true)
+        }
         await openHtml(tileHtml(440, 280, 120, 40, 15))
         await capture(path.join(OUT, 'tile-small-440x280.png'), 440, 280)
         await openHtml(tileHtml(1400, 560, 300, 104, 36))

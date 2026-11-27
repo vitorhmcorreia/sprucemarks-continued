@@ -112,7 +112,7 @@ that for enterprise-managed or store installs, so it doesn't help).
 favorites of public websites, drives it over the DevTools protocol, and writes six 1280×800 screenshots plus the
 300×300 logo and both promotional tiles. The listing text, search terms and certification notes sit next to them in
 `store/listing.md`. Each release can refresh the screenshots in one command, they always show the current UI, and the
-same files will serve a Chrome listing later. Category: Productivity.
+same files will serve a Chrome listing later (they didn't quite: see D22). Category: Productivity.
 
 Considered: hand-made screenshots of the user's own browser (shows real favorites and isn't repeatable); generating
 the copy with Partner Center's "Generate with AI" (it can't know about the fork wording D1 requires). Gotchas found
@@ -249,3 +249,18 @@ Confirmed on the user's collection the same day: rechecking with the new pacing,
 `?cbrd=1&ucbcb=1` (its no-consent-cookie markers, since checks send no cookies): a redirect to the same page that only
 adds parameters now counts as OK, a redirect to a cookie-consent page has its own result without "Update address",
 and the Update button re-applies the current rule so results saved earlier can't add that noise to a favorite.
+
+## D22. The Chrome listing gets its own images, taken in Chrome (2026-11-27)
+
+D13 assumed the Edge images would serve a Chrome listing too, but the options page draws each browser's own folder
+names and pictures: in Edge the screenshots show "Favorites bar", in Chrome "Bookmarks Bar". Edge wording in a Chrome
+listing reads as a port and invites reviewer questions, so `make-store-assets.js chrome` takes the same screenshots in
+Chrome for Testing and writes them, tiles saying "bookmarks" and the 128×128 store icon Google requires (96×96 artwork,
+16 px padding) to `store/chrome/`, next to its own `listing.md` (the listing text reworded from favorites to bookmarks,
+plus the fields only Chrome asks for: single purpose, host-permission justification, data-usage answers, test
+instructions). Prepared before the account exists, so submitting is paste-and-upload once the $5 fee is paid (D3).
+
+Considered: reusing the Edge screenshots (they show Edge UI); one shared listing file with both stores' text (the two
+dashboards ask different questions and the wording differs throughout). Gotcha: on the user's machine
+`@puppeteer/browsers@2.3.0 install chrome@stable` (Chrome 158) unpacked a truncated 308 MB `chrome` that segfaults
+("missing section headers"); the downloaded zip was intact, and unzipping it by hand works.

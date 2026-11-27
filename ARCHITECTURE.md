@@ -38,6 +38,7 @@ test/hooks-install.sh    tests .githooks/install in throwaway repositories (runs
 docs/                    design notes (dead-link checker)
 store/                   Edge listing: listing.md (copy for Partner Center), logo, tiles, screenshots, and
                          make-store-assets.js, which regenerates the images from deploy/ (D13)
+store/chrome/            Chrome Web Store listing (in review since 2026-11-27): listing.md and images taken in Chrome (D22)
 dist/                    store zips (git-ignored)
 ```
 
@@ -120,6 +121,7 @@ notice for people moving from the archived original (D6).
      `store/listing.md` (Updates). Only when no earlier version is still in review: a new submission replaces the one
      in review and restarts its review (Microsoft, "Update or remove an extension"). Prepare and merge the release PR
      any time; push the tag when the store is ready for it.
-- Refresh the store images when the UI changed: `node store/make-store-assets.js` (after `node build.js`).
+- Refresh the store images when the UI changed: `node store/make-store-assets.js` (after `node build.js`); for
+  Chrome, `BROWSER=<Chrome for Testing> node store/make-store-assets.js chrome` once that listing exists (D22).
 - Store: Microsoft Edge Add-ons, live since 2026-11-14 (D3); what to paste where is in `store/listing.md`. Privacy
   answers: no data collected, see [PRIVACY.md](PRIVACY.md).
