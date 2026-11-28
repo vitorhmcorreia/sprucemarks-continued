@@ -117,7 +117,7 @@ Sprucemarks Continued is a community fork of the open-source Sprucemarks extensi
 
 ## After it is published
 
-Done on 2026-11-28: listing URL above, README install section, D3, ARCHITECTURE and the About page (links both stores,
+Done on 2026-11-28: listing URL above, README install section, D3, ARCHITECTURE and the About page (links both stores, D23,
 since Brave, Opera and Vivaldi install from the Chrome Web Store too; ships with the next release).
 
 - Each release: upload the same zip in both dashboards; refresh images with both `make-store-assets.js` commands.

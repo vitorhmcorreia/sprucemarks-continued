@@ -267,3 +267,13 @@ Considered: reusing the Edge screenshots (they show Edge UI); one shared listing
 dashboards ask different questions and the wording differs throughout). Gotcha: on the user's machine
 `@puppeteer/browsers@2.3.0 install chrome@stable` (Chrome 158) unpacked a truncated 308 MB `chrome` that segfaults
 ("missing section headers"); the downloaded zip was intact, and unzipping it by hand works.
+
+## D23. The About page links both stores, in every browser (2026-11-28)
+
+When the Chrome Web Store listing went live, the About page's single Edge Add-ons link got a Chrome Web Store link
+next to it, shown to everyone. Brave, Opera and Vivaldi install from the Chrome Web Store too, so a link chosen by
+browser would have needed to tell those apart from Chrome (their user agents mostly look like Chrome's), and a wrong
+guess sends people to a store they can't use. Two links in one sentence cost nothing.
+
+Considered: the `only-edge` / `only-non-edge` spans already used for "favorites" vs "bookmarks" (Edge-only link in
+Edge, Chrome link elsewhere): tidy, but it hides the other store from people who use both browsers, for no real gain.
