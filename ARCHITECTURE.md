@@ -38,7 +38,7 @@ test/hooks-install.sh    tests .githooks/install in throwaway repositories (runs
 docs/                    design notes (dead-link checker)
 store/                   Edge listing: listing.md (copy for Partner Center), logo, tiles, screenshots, and
                          make-store-assets.js, which regenerates the images from deploy/ (D13)
-store/chrome/            Chrome Web Store listing (in review since 2026-11-27): listing.md and images taken in Chrome (D22)
+store/chrome/            Chrome Web Store listing (live since 2026-11-28): listing.md and images taken in Chrome (D22)
 dist/                    store zips (git-ignored)
 ```
 

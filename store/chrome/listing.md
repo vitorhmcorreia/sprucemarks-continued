@@ -1,6 +1,7 @@
 # Chrome Web Store listing: Sprucemarks Continued
 
-Submitted for review on 2026-11-27 (version 2026.11.14.2); not live yet. Everything that was pasted into the
+Live since 2026-11-28: https://chromewebstore.google.com/detail/sprucemarks-continued/jeaflgnbhjbnlogegbbipdledofcband (item ID `jeaflgnbhjbnlogegbbipdledofcband`), version 2026.11.14.2, submitted
+2026-11-27. Everything that was pasted into the
 developer dashboard (https://chrome.google.com/webstore/devconsole) is below. The package, privacy
 policy and fork wording are the same as the Edge listing (`../listing.md`); the text here says "bookmarks", because that
 is what Chrome calls them, and the images in this folder were taken in Chrome (D22).
@@ -116,8 +117,7 @@ Sprucemarks Continued is a community fork of the open-source Sprucemarks extensi
 
 ## After it is published
 
-- Record the listing URL and item ID at the top of this file.
-- README: replace "there's no Chrome Web Store listing yet" in the install section with the store link.
-- DECISIONS.md D3 and ARCHITECTURE.md (Store line): add the Chrome listing.
-- The About page links to the Edge listing; consider linking the Chrome one when running in Chrome.
+Done on 2026-11-28: listing URL above, README install section, D3, ARCHITECTURE and the About page (links both stores, D23,
+since Brave, Opera and Vivaldi install from the Chrome Web Store too; ships with the next release).
+
 - Each release: upload the same zip in both dashboards; refresh images with both `make-store-assets.js` commands.
