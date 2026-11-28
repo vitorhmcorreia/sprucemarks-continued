@@ -25,6 +25,9 @@ Microsoft's developer account is free; Google's costs a one-time $5, which the u
 package is the same for both, so adding Chrome later only needs the listing. Firefox (AMO, also free) is possible later
 but needs the background-script variant noted in the README.
 
+Update 2026-11-28: the user paid the Chrome fee after all; the Chrome Web Store listing (submitted 2026-11-27, D22) is
+live since 2026-11-28. Both stores get the same zip each release.
+
 ## D4. Replace Feri with a small `build.js` (2026-11-14)
 
 Feri, the original build tool, was unpublished from npm on 2026-08-24, so the project could no longer be built. Its

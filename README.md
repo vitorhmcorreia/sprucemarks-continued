@@ -19,6 +19,11 @@ the original author.
 
 ## Install
 
+### From the Chrome Web Store (Chrome, Brave, Opera, Vivaldi)
+
+**[Get Sprucemarks Continued on the Chrome Web Store](https://chromewebstore.google.com/detail/sprucemarks-continued/jeaflgnbhjbnlogegbbipdledofcband)** (published November 28, 2026). Store installs update
+automatically.
+
 ### From the Microsoft Edge Add-ons store
 
 **[Get Sprucemarks Continued on Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/sprucemarks-continued/kbnolfoleaklmdmejgffhmbodflkojeh)** (published November 14, 2026). Store installs update
@@ -26,7 +31,7 @@ automatically.
 
 ### Manually, in Chrome, Edge, Brave, Opera or Vivaldi
 
-Use this if you're on Chrome (there's no Chrome Web Store listing yet) or you'd rather not use a store.
+Use this if you'd rather not use a store, or want a version before it has passed store review.
 
 1. Download `sprucemarks-continued-<version>.zip` from the latest release on the [Releases page](https://github.com/vitorhmcorreia/sprucemarks-continued/releases).
 2. Unzip it into a folder you'll keep, for example `Documents/Sprucemarks Continued`. The browser loads the extension
